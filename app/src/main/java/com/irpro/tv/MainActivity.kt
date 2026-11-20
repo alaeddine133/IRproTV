@@ -326,8 +326,7 @@ fun App(startScreen: String = "intro") {
                     else -> {
                         val rev by UserData.rev.collectAsState()
                         val last = remember(rev, catalog) { UserData.recents(active.id).firstNotNullOfOrNull { byId[it] } }
-                        val favs = remember(rev) { UserData.favorites(active.id).size }
-                        HomeScreen(
+                        com.irpro.tv.ui.MosaicHomeScreen(
                             playlist = active, catalog = catalog, updating = content.loading,
                             onOpen = {
                                 when (it) {
@@ -340,10 +339,11 @@ fun App(startScreen: String = "intro") {
                             },
                             onSearch = { screen = "search" },
                             onSettings = { screen = "settings" },
-                            lastChannel = last, favoritesCount = favs,
+                            onMyList = { screen = "mylist" },
+                            onProfiles = { screen = "profiles" },
+                            lastChannel = last,
                             onPlayChannel = { ch -> playChannel(ch, CAT_RECENT, "home") },
                             onMovie = { openMovie(it, "home") },
-                            onMyList = { screen = "mylist" },
                         )
                         // Nouvelle version de l'appli ? (vérifié en arrivant sur l'accueil)
                         LaunchedEffect(updateChecked) {
