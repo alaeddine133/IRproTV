@@ -117,13 +117,13 @@ fun LiveScreen(
                 }
                 val special = listOf(CAT_FAV to "♥  Favoris", CAT_RECENT to "↺  Récentes")
                 itemsIndexed(special) { i, (id, label) ->
-                    CatRow(label, null, id == catId, if (i == 0 && startChannel == null && cats.isEmpty()) Modifier.focusRequester(catFocus) else Modifier) { catId = id }
+                    CatRow(label, null, id == catId, if (id == catId || (i == 0 && cats.isEmpty())) Modifier.focusRequester(catFocus) else Modifier) { catId = id }
                 }
                 item { Box(Modifier.padding(horizontal = 18.dp, vertical = 6.dp).fillMaxWidth().height(1.dp).background(Color(0xFF1D2B55))) }
                 itemsIndexed(cats, key = { _, c -> c.id }) { i, c ->
                     CatRow(
                         c.name, counts[c.id], c.id == catId,
-                        if (c.id == catId || (i == 0 && cats.none { it.id == catId })) Modifier.focusRequester(catFocus) else Modifier,
+                        if (c.id == catId || (i == 0 && catId != CAT_FAV && catId != CAT_RECENT && cats.none { it.id == catId })) Modifier.focusRequester(catFocus) else Modifier,
                         fr = c.isFrench,
                     ) { catId = c.id }
                 }

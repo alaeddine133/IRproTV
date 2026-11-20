@@ -90,6 +90,7 @@ private class Nav {
     var gridCat: String = ""
     var guideBack: String = "home"
     var playBack: String = "live"
+    var vodStart: Long? = null
 }
 
 @Composable
@@ -219,7 +220,7 @@ fun App() {
                         if (m == null) LaunchedEffect(Unit) { screen = "movies" }
                         else MovieDetailScreen(active, m,
                             onPlay = { from ->
-                                if (from == 0L) UserData.saveResume(active.id, UserData.Resume(m.id, 0, 0, m.name, "movie", "", System.currentTimeMillis()))
+                                nav.vodStart = from
                                 nav.vodQueue = listOf(VodEntry(m.id, m.name, "", m.url, "movie", ""))
                                 nav.vodIndex = 0; nav.vodBack = here; screen = "vod"
                             },
@@ -230,7 +231,8 @@ fun App() {
                         val s = catalog.series.firstOrNull { it.id == here.removePrefix("show:") }
                         if (s == null) LaunchedEffect(Unit) { screen = "series" }
                         else SeriesDetailScreen(active, s,
-                            onPlay = { eps, idx ->
+                            onPlay = { eps, idx, from ->
+                                nav.vodStart = from
                                 nav.vodQueue = eps.map { VodEntry(it.id, s.name, "S${it.season} · E${it.number} · ${it.title}", it.url, "episode", s.id) }
                                 nav.vodIndex = idx; nav.vodBack = here; screen = "vod"
                             },
@@ -238,7 +240,7 @@ fun App() {
                     }
                     screen == "vod" -> {
                         if (nav.vodQueue.isEmpty()) LaunchedEffect(Unit) { screen = "home" }
-                        else VodPlayerScreen(active, nav.vodQueue, nav.vodIndex, onExit = { screen = nav.vodBack })
+                        else VodPlayerScreen(active, nav.vodQueue, nav.vodIndex, nav.vodStart, onExit = { screen = nav.vodBack })
                     }
                     else -> {
                         val rev by UserData.rev.collectAsState()

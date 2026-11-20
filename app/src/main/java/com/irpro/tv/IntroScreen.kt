@@ -22,6 +22,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.height
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -184,7 +185,7 @@ private fun CounterOverlay(player: ExoPlayer, count: Int) {
         val density = androidx.compose.ui.platform.LocalDensity.current
         androidx.compose.foundation.layout.Column(
             Modifier
-                .offset(x = (ox + 150f * s).dp, y = (oy + (1080f - 190f - 196f) * s).dp)
+                .offset(x = (ox + 150f * s).dp, y = (oy + 696f * s).dp)
                 .alpha(alpha)
         ) {
             androidx.compose.material3.Text(
@@ -194,6 +195,7 @@ private fun CounterOverlay(player: ExoPlayer, count: Int) {
                 letterSpacing = with(density) { (-6f * s).dp.toSp() },
                 lineHeight = with(density) { (150f * s).dp.toSp() },
             )
+            androidx.compose.foundation.layout.Spacer(Modifier.height((8f * s).dp))
             androidx.compose.material3.Text(
                 "CHAÎNES EN DIRECT", color = Color(0xFFA78BFA), fontFamily = medium,
                 fontSize = with(density) { (30f * s).dp.toSp() },

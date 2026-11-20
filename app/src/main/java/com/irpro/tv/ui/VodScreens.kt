@@ -268,7 +268,7 @@ fun MovieDetailScreen(playlist: Playlist, movie: Movie, onPlay: (Long) -> Unit, 
 fun SeriesDetailScreen(
     playlist: Playlist,
     series: Series,
-    onPlay: (List<EpisodeItem>, Int) -> Unit,
+    onPlay: (List<EpisodeItem>, Int, Long?) -> Unit,
     onBack: () -> Unit,
 ) {
     BackHandler(onBack = onBack)
@@ -305,11 +305,11 @@ fun SeriesDetailScreen(
                     val resIdx = eps.indexOfFirst { it.id == resume?.id }
                     if (resIdx >= 0) {
                         val e = eps[resIdx]
-                        IrButton("▶  Reprendre S${e.season} · E${e.number}", modifier = Modifier.focusRequester(first)) { onPlay(eps, resIdx) }
+                        IrButton("▶  Reprendre S${e.season} · E${e.number}", modifier = Modifier.focusRequester(first)) { onPlay(eps, resIdx, resume?.pos) }
                     } else if (eps.isNotEmpty()) {
                         val nextUnseen = eps.indexOfFirst { it.id !in watched }.coerceAtLeast(0)
                         val e = eps[nextUnseen]
-                        IrButton("▶  Regarder S${e.season} · E${e.number}", modifier = Modifier.focusRequester(first)) { onPlay(eps, nextUnseen) }
+                        IrButton("▶  Regarder S${e.season} · E${e.number}", modifier = Modifier.focusRequester(first)) { onPlay(eps, nextUnseen, null) }
                     }
                     IrButton(if (inList) "✓ Ma liste" else "+ Ma liste", primary = false) { UserData.toggleMyList(playlist.id, series.id) }
                 }
@@ -343,7 +343,7 @@ fun SeriesDetailScreen(
                             .background(if (f) IrColors.Violet else Color.Transparent)
                             .border(if (f) 2.dp else 0.dp, if (f) IrColors.Cyan else Color.Transparent, RoundedCornerShape(10.dp))
                             .onFocusChanged { f = it.isFocused }
-                            .clickable { onPlay(eps, idx) }
+                            .clickable { onPlay(eps, idx, null) }
                             .padding(8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {

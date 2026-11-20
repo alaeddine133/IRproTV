@@ -278,6 +278,7 @@ fun VodPlayerScreen(
     playlist: Playlist,
     queue: List<VodEntry>,
     startIndex: Int,
+    startMs: Long? = null,
     onExit: () -> Unit,
 ) {
     var index by remember { mutableIntStateOf(startIndex) }
@@ -287,7 +288,7 @@ fun VodPlayerScreen(
     val pb = rememberPlayback()
     val settings = UserData.settings.value
 
-    var askResume by remember(item.id) { mutableStateOf(UserData.resumeOf(playlist.id, item.id)?.takeIf { it.pos > 30_000 }) }
+    var askResume by remember(item.id) { mutableStateOf(if (index == startIndex && startMs != null) null else UserData.resumeOf(playlist.id, item.id)?.takeIf { it.pos > 30_000 }) }
     var started by remember(item.id) { mutableStateOf(false) }
     var pos by remember { mutableLongStateOf(0L) }
     var dur by remember { mutableLongStateOf(0L) }
@@ -309,7 +310,7 @@ fun VodPlayerScreen(
     fun start(fromMs: Long) { started = true; askResume = null; pb.play(item.url, fromMs); controls++ }
     fun goNext() { save(); if (next != null) { index++ } else onExit() }
 
-    LaunchedEffect(item.id) { if (askResume == null) start(0) }
+    LaunchedEffect(item.id) { if (askResume == null) start(if (index == startIndex && startMs != null) startMs else 0) }
     pb.onEnded = { if (next != null && settings.autoNextEpisode && !nextDismissed) goNext() else { save(); onExit() } }
     DisposableEffect(item.id) { onDispose { save() } }
 
