@@ -90,6 +90,7 @@ fun HomeScreen(
     favoritesCount: Int = 0,
     onPlayChannel: (com.irpro.tv.data.Channel) -> Unit = {},
     onMovie: (String) -> Unit = {},
+    onMyList: (() -> Unit)? = null,
 ) {
     val activity = LocalContext.current as? Activity
     var selected by rememberSaveable { mutableIntStateOf(0) }
@@ -186,7 +187,8 @@ fun HomeScreen(
                 InfoCard("Dernière chaîne", lastChannel?.name ?: "Aucune pour l'instant", Modifier.weight(1f)) {
                     if (lastChannel != null) onPlayChannel(lastChannel) else onOpen(Section.LIVE)
                 }
-                InfoCard("Favoris", if (favoritesCount > 0) "$favoritesCount chaîne(s)" else "Ajoute tes chaînes préférées", Modifier.weight(1f)) { onOpen(Section.FAVORITES) }
+                if (ThemeState.pro && onMyList != null) InfoCard("Ma liste", "Reprendre, favoris et chaînes", Modifier.weight(1f)) { onMyList() }
+                else InfoCard("Favoris", if (favoritesCount > 0) "$favoritesCount chaîne(s)" else "Ajoute tes chaînes préférées", Modifier.weight(1f)) { onOpen(Section.FAVORITES) }
                 InfoCard("Nouveau film", latest?.name ?: "—", Modifier.weight(1f)) { if (latest != null) onMovie(latest.id) else onOpen(Section.MOVIES) }
                 InfoCard("Abonnement", subscriptionText(playlist), Modifier.weight(1f)) { onSettings() }
             }

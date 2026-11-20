@@ -102,6 +102,17 @@ fun LivePlayerScreen(
     val refocus by UiEvents.refocus.collectAsState()
     LaunchedEffect(refocus) { if (refocus > 0 && !quick) runCatching { focus.requestFocus() } }
 
+    // Thème 2 : une nouvelle tentative automatique après 5 s (une fois par chaîne), OK = réessayer
+    var retryIn by remember { mutableStateOf<Int?>(null) }
+    var autoRetried by remember(current.id) { mutableStateOf(false) }
+    LaunchedEffect(pb.error, current.id) {
+        retryIn = null
+        if (pb.error != null && ThemeState.pro && !autoRetried) {
+            for (s in 5 downTo 1) { retryIn = s; delay(1000) }
+            retryIn = null; autoRetried = true; pb.play(current.url)
+        }
+    }
+
     fun zap(d: Int) {
         val i = list.indexOfFirst { it.id == current.id }.let { if (it < 0) 0 else it }
         current = list[(i + d + list.size) % list.size]
@@ -124,7 +135,7 @@ fun LivePlayerScreen(
                         val f = UserData.toggleFavorite(playlist.id, current.id)
                         toast = if (f) "♥ Ajoutée aux favoris" else "Retirée des favoris"; true
                     }
-                    else -> if (isCenter(e.key)) { quick = true; true } else false
+                    else -> if (isCenter(e.key)) { if (pb.error != null && ThemeState.pro) pb.play(current.url) else quick = true; true } else false
                 }
             }
             .clickable { if (!quick) quick = true }
@@ -132,7 +143,8 @@ fun LivePlayerScreen(
         VideoSurface(pb, Modifier.fillMaxSize())
 
         if (pb.buffering && pb.error == null) CircularProgressIndicator(color = IrColors.Cyan, modifier = Modifier.align(Alignment.Center).size(46.dp))
-        pb.error?.let {
+        if (ThemeState.pro) pb.error?.let { ProPlaybackError(current.name, epg.firstOrNull { val t = System.currentTimeMillis(); t in it.start until it.end }?.title ?: "", live = true, detail = it, autoRetryIn = retryIn) }
+        else pb.error?.let {
             Column(Modifier.align(Alignment.Center).background(Color(0xDD050A1C), RoundedCornerShape(14.dp)).padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(current.name, color = IrColors.Cyan, fontSize = 15.sp)
                 Text(it, color = Color.White, fontSize = 16.sp)
@@ -312,6 +324,15 @@ fun VodPlayerScreen(
             UserData.Resume(item.id, pb.engine.position(), pb.engine.duration(), item.title + if (item.subtitle.isNotBlank()) " · ${item.subtitle}" else "", item.kind, item.parentId, System.currentTimeMillis())
         )
     }
+    var vodRetryIn by remember { mutableStateOf<Int?>(null) }
+    var vodRetried by remember(item.id) { mutableStateOf(false) }
+    LaunchedEffect(pb.error, item.id) {
+        vodRetryIn = null
+        if (pb.error != null && ThemeState.pro && !vodRetried) {
+            for (s in 5 downTo 1) { vodRetryIn = s; delay(1000) }
+            vodRetryIn = null; vodRetried = true; pb.play(item.url, pos)
+        }
+    }
     fun start(fromMs: Long) { started = true; askResume = null; pb.play(item.url, fromMs); controls++ }
     fun goNext() { save(); if (next != null) { index++ } else onExit() }
 
@@ -380,7 +401,8 @@ fun VodPlayerScreen(
     ) {
         VideoSurface(pb, Modifier.fillMaxSize())
         if (pb.buffering && started && pb.error == null) CircularProgressIndicator(color = IrColors.Cyan, modifier = Modifier.align(Alignment.Center).size(46.dp))
-        pb.error?.let {
+        if (ThemeState.pro) pb.error?.let { ProPlaybackError(item.title, item.subtitle, live = false, detail = it, autoRetryIn = vodRetryIn) }
+        else pb.error?.let {
             Text(it, color = Color.White, fontSize = 16.sp, modifier = Modifier.align(Alignment.Center).background(Color(0xDD050A1C), RoundedCornerShape(12.dp)).padding(20.dp))
         }
 

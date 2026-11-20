@@ -199,6 +199,20 @@ fun App(startScreen: String = "intro") {
                         onBack = { screen = "home" },
                         startSection = if (themeSwitched) 6 else 0,
                     )
+                    screen == "search" && com.irpro.tv.ui.ThemeState.pro -> com.irpro.tv.ui.ProSearchScreen(
+                        catalog,
+                        onChannel = { id -> byId[id]?.let { playChannel(it, it.categoryId, "search") } },
+                        onMovie = { openMovie(it, "search") },
+                        onSeries = { openSeries(it, "search") },
+                        onBack = { screen = "home" },
+                    )
+                    screen == "mylist" -> com.irpro.tv.ui.ProMyListScreen(
+                        active, catalog,
+                        onMovie = { openMovie(it, "mylist") },
+                        onSeries = { openSeries(it, "mylist") },
+                        onChannel = { ch -> playChannel(ch, CAT_FAV, "mylist") },
+                        onBack = { screen = "home" },
+                    )
                     screen == "search" -> SearchScreen(
                         catalog,
                         onChannel = { id -> byId[id]?.let { playChannel(it, it.categoryId, "search") } },
@@ -220,7 +234,7 @@ fun App(startScreen: String = "intro") {
                             onGuide = { c, cat -> nav.liveChannel = c.id; nav.liveCat = cat; nav.guideBack = "liveplay"; screen = "guide" },
                             onExit = { c, cat ->
                                 nav.liveChannel = c.id; nav.liveCat = cat
-                                screen = if (nav.playBack == "home" || nav.playBack == "search") nav.playBack else "live"
+                                screen = if (nav.playBack == "home" || nav.playBack == "search" || nav.playBack == "mylist") nav.playBack else "live"
                             },
                             pb = livePb!!,
                         )
@@ -248,6 +262,14 @@ fun App(startScreen: String = "intro") {
                         val here = screen
                         val m = catalog.movies.firstOrNull { it.id == here.removePrefix("movie:") }
                         if (m == null) LaunchedEffect(Unit) { screen = "movies" }
+                        else if (com.irpro.tv.ui.ThemeState.pro) com.irpro.tv.ui.ProMovieDetailScreen(active, catalog, m,
+                            onPlay = { from ->
+                                nav.vodStart = from
+                                nav.vodQueue = listOf(VodEntry(m.id, m.name, "", m.url, "movie", ""))
+                                nav.vodIndex = 0; nav.vodBack = here; screen = "vod"
+                            },
+                            onOpen = { id -> screen = "movie:$id" },
+                            onBack = { screen = nav.detailBack })
                         else MovieDetailScreen(active, m,
                             onPlay = { from ->
                                 nav.vodStart = from
@@ -260,6 +282,13 @@ fun App(startScreen: String = "intro") {
                         val here = screen
                         val s = catalog.series.firstOrNull { it.id == here.removePrefix("show:") }
                         if (s == null) LaunchedEffect(Unit) { screen = "series" }
+                        else if (com.irpro.tv.ui.ThemeState.pro) com.irpro.tv.ui.ProSeriesDetailScreen(active, catalog, s,
+                            onPlay = { eps, idx, from ->
+                                nav.vodStart = from
+                                nav.vodQueue = eps.map { VodEntry(it.id, s.name, "S${it.season} · E${it.number} · ${it.title}", it.url, "episode", s.id) }
+                                nav.vodIndex = 0.coerceAtLeast(idx); nav.vodBack = here; screen = "vod"
+                            },
+                            onBack = { screen = nav.detailBack })
                         else SeriesDetailScreen(active, s,
                             onPlay = { eps, idx, from ->
                                 nav.vodStart = from
@@ -292,12 +321,13 @@ fun App(startScreen: String = "intro") {
                             lastChannel = last, favoritesCount = favs,
                             onPlayChannel = { ch -> playChannel(ch, CAT_RECENT, "home") },
                             onMovie = { openMovie(it, "home") },
+                            onMyList = { screen = "mylist" },
                         )
                         // Nouvelle version de l'appli ? (vérifié en arrivant sur l'accueil)
                         LaunchedEffect(updateChecked) {
                             if (!updateChecked) { delay(2500); update = Updater.check(); updateChecked = true }
                         }
-                        update?.let { UpdateDialog(it, onLater = { update = null }) }
+                        update?.let { if (com.irpro.tv.ui.ThemeState.pro) com.irpro.tv.ui.ProUpdateDialog(it, onLater = { update = null }) else UpdateDialog(it, onLater = { update = null }) }
                     }
                 }
 

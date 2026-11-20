@@ -92,6 +92,13 @@ object UserData {
 
     private fun k(pl: String, what: String) = "$pl:$what"
 
+    /** Recherches récentes (écran Recherche du Thème 2). */
+    fun recentSearches(): List<String> = list("recent_search")
+    fun addRecentSearch(q: String) {
+        val t = q.trim(); if (t.length < 2) return
+        putList("recent_search", (listOf(t) + recentSearches().filterNot { it.equals(t, ignoreCase = true) }).take(8))
+    }
+
     fun favorites(pl: String) = list(k(pl, "fav"))
     fun isFavorite(pl: String, id: String) = id in favorites(pl)
     fun toggleFavorite(pl: String, id: String): Boolean {
