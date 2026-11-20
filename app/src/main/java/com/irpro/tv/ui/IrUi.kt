@@ -103,7 +103,7 @@ fun IrButton(
                 shape
             )
             .onFocusChanged { if (it.isFocused && !focused) Sfx.move(); focused = it.isFocused }
-            .clickable(enabled = enabled) { Sfx.select(); onClick() }
+            .clickable { if (enabled) { Sfx.select(); onClick() } }
             .padding(horizontal = 28.dp, vertical = 12.dp),
         contentAlignment = Alignment.Center,
     ) {

@@ -56,6 +56,11 @@ data class Catalog(
 ) {
     val isEmpty get() = channels.isEmpty() && movies.isEmpty() && series.isEmpty()
 
+    /** Index calculés une seule fois (rapide même avec des dizaines de milliers d'entrées). */
+    val channelsByCategory: Map<String, List<Channel>> by lazy { channels.groupBy { it.categoryId } }
+    val channelById: Map<String, Channel> by lazy { channels.associateBy { it.id } }
+    val channelCountByCategory: Map<String, Int> by lazy { channelsByCategory.mapValues { it.value.size } }
+
     /** Catégories françaises en premier (l'ordre du fournisseur est gardé à l'intérieur de chaque groupe). */
     fun sorted(): Catalog = copy(
         liveCategories = FrenchPriority.sortCategories(liveCategories),

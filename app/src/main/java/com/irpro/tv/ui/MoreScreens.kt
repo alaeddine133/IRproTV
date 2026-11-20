@@ -130,14 +130,30 @@ fun SearchScreen(
     onBack: () -> Unit,
 ) {
     BackHandler(onBack = onBack)
-    var q by remember { mutableStateOf("") }
+    var q by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("") }
     val field = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { field.requestFocus() } }
-    val norm: (String) -> String = { java.text.Normalizer.normalize(it, java.text.Normalizer.Form.NFD).replace(Regex("\\p{Mn}+"), "").lowercase() }
-    val query = norm(q.trim())
-    val ch = remember(query) { if (query.length < 2) emptyList() else catalog.channels.filter { norm(it.name).contains(query) }.take(40) }
-    val mv = remember(query) { if (query.length < 2) emptyList() else catalog.movies.filter { norm(it.name).contains(query) }.take(40) }
-    val se = remember(query) { if (query.length < 2) emptyList() else catalog.series.filter { norm(it.name).contains(query) }.take(40) }
+    // Noms « simplifiés » calculés une fois, hors de l'écran (rapide même avec 50 000 titres)
+    val index by androidx.compose.runtime.produceState<List<List<String>>?>(null, catalog) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+            listOf(catalog.channels.map { normName(it.name) }, catalog.movies.map { normName(it.name) }, catalog.series.map { normName(it.name) })
+        }
+    }
+    var ch by remember { mutableStateOf(emptyList<com.irpro.tv.data.Channel>()) }
+    var mv by remember { mutableStateOf(emptyList<com.irpro.tv.data.Movie>()) }
+    var se by remember { mutableStateOf(emptyList<com.irpro.tv.data.Series>()) }
+    val query = normName(q.trim())
+    LaunchedEffect(query, index) {
+        val idx = index ?: return@LaunchedEffect
+        delay(250)
+        if (query.length < 2) { ch = emptyList(); mv = emptyList(); se = emptyList(); return@LaunchedEffect }
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+            val c = catalog.channels.filterIndexed { i, _ -> idx[0][i].contains(query) }.take(40)
+            val m = catalog.movies.filterIndexed { i, _ -> idx[1][i].contains(query) }.take(40)
+            val s2 = catalog.series.filterIndexed { i, _ -> idx[2][i].contains(query) }.take(40)
+            Triple(c, m, s2)
+        }.let { (c, m, s2) -> ch = c; mv = m; se = s2 }
+    }
 
     Column(Modifier.fillMaxSize().background(IrColors.Night).padding(horizontal = 36.dp, vertical = 22.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -152,7 +168,7 @@ fun SearchScreen(
             if (ch.isNotEmpty()) item {
                 Text("Chaînes · ${ch.size}", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(vertical = 8.dp))
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    items(ch, key = { it.id }) { c ->
+                    items(ch.distinctBy { it.id }, key = { it.id }) { c ->
                         var f by remember { mutableStateOf(false) }
                         Column(
                             Modifier.width(150.dp).clip(RoundedCornerShape(10.dp)).background(if (f) IrColors.Violet else IrColors.Card)
@@ -170,18 +186,21 @@ fun SearchScreen(
             if (mv.isNotEmpty()) item {
                 Text("Films · ${mv.size}", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 14.dp, bottom = 8.dp))
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    items(mv, key = { it.id }) { m -> PosterCard(Poster(m.id, m.name, m.poster)) { onMovie(m.id) } }
+                    items(mv.distinctBy { it.id }, key = { it.id }) { m -> PosterCard(Poster(m.id, m.name, m.poster)) { onMovie(m.id) } }
                 }
             }
             if (se.isNotEmpty()) item {
                 Text("Séries · ${se.size}", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 14.dp, bottom = 8.dp))
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    items(se, key = { it.id }) { s -> PosterCard(Poster(s.id, s.name, s.cover)) { onSeries(s.id) } }
+                    items(se.distinctBy { it.id }, key = { it.id }) { s -> PosterCard(Poster(s.id, s.name, s.cover)) { onSeries(s.id) } }
                 }
             }
         }
     }
 }
+
+private val MARKS = Regex("\\p{Mn}+")
+fun normName(s: String): String = java.text.Normalizer.normalize(s, java.text.Normalizer.Form.NFD).replace(MARKS, "").lowercase()
 
 /* ================= Paramètres ================= */
 
@@ -230,13 +249,13 @@ fun SettingsScreen(
                 }
                 1 -> {
                     InfoLine("Dernière mise à jour du contenu", state.catalog?.updatedAt?.let { java.text.SimpleDateFormat("dd/MM 'à' HH:mm", java.util.Locale.FRANCE).format(java.util.Date(it)) } ?: "—")
-                    ActionRow(if (state.loading) "Mise à jour en cours… ${state.step}" else "Mettre à jour le contenu maintenant", onRefresh)
+                    ActionRow(if (state.loading) "Mise à jour en cours… ${state.step}" else "Mettre à jour le contenu maintenant") { if (!state.loading) onRefresh() }
                     ToggleRow("Mettre à jour le contenu à chaque lancement", s.refreshOnLaunch) { v -> UserData.updateSettings { it.copy(refreshOnLaunch = v) } }
                     InfoLine("Version installée", "IR PRO TV ${BuildConfig.VERSION_NAME}")
                     ActionRow("Vérifier si une nouvelle version existe", onCheckUpdate)
                 }
                 2 -> {
-                    ToggleRow("Contenu français en premier", s.frenchFirst) { v -> UserData.updateSettings { it.copy(frenchFirst = v) }; onRefresh() }
+                    ToggleRow("Contenu français en premier", s.frenchFirst) { v -> UserData.updateSettings { it.copy(frenchFirst = v) }; com.irpro.tv.data.ContentRepository.resort(ctx) }
                     ChoiceRow("Langue audio préférée", listOf("fr" to "Français", "en" to "Anglais", "ar" to "Arabe", "es" to "Espagnol"), s.audioLang) { v -> UserData.updateSettings { it.copy(audioLang = v) } }
                 }
                 3 -> {
@@ -326,8 +345,7 @@ fun UpdateDialog(info: UpdateInfo, onLater: () -> Unit) {
     var msg by remember { mutableStateOf<String?>(null) }
     val f = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { f.requestFocus() } }
-    BackHandler(onBack = onLater)
-    Box(Modifier.fillMaxSize().background(Color(0xB3000000)), contentAlignment = Alignment.Center) {
+    androidx.compose.ui.window.Dialog(onDismissRequest = onLater) {
         Column(Modifier.width(520.dp).background(IrColors.Card, RoundedCornerShape(18.dp)).border(1.dp, IrColors.Cyan, RoundedCornerShape(18.dp)).padding(24.dp)) {
             Text("Nouvelle version ${info.versionName}", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
             Text("Tu as la ${BuildConfig.VERSION_NAME}", color = IrColors.TextDim, fontSize = 14.sp)
@@ -336,7 +354,8 @@ fun UpdateDialog(info: UpdateInfo, onLater: () -> Unit) {
             progress?.let { LinearProgressIndicator(progress = { it }, modifier = Modifier.fillMaxWidth().height(5.dp), color = IrColors.Cyan, trackColor = Color(0xFF1D2B55)); Spacer(Modifier.height(10.dp)) }
             msg?.let { Text(it, color = IrColors.Cyan, fontSize = 14.sp); Spacer(Modifier.height(10.dp)) }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                IrButton(if (progress == null) "Installer" else "Téléchargement…", modifier = Modifier.focusRequester(f), enabled = progress == null) {
+                IrButton(if (progress == null) "Installer" else "Téléchargement…", modifier = Modifier.focusRequester(f)) {
+                    if (progress != null) return@IrButton
                     if (!Updater.canInstall(ctx)) {
                         msg = "Autorise IR PRO TV à installer des applis (une seule fois), puis reviens et appuie sur Installer."
                         Updater.openInstallPermission(ctx)
@@ -345,7 +364,7 @@ fun UpdateDialog(info: UpdateInfo, onLater: () -> Unit) {
                     scope.launch {
                         progress = 0f
                         runCatching { Updater.download(ctx, info) { p -> progress = p } }
-                            .onSuccess { Updater.install(ctx, it); progress = null; msg = "Appuie sur « Installer » dans la fenêtre d'Android." }
+                            .onSuccess { progress = null; msg = if (Updater.install(ctx, it)) "Appuie sur « Installer » dans la fenêtre d'Android." else "Impossible d'ouvrir l'installateur d'Android sur cette box." }
                             .onFailure { progress = null; msg = "Téléchargement impossible. Réessaie plus tard." }
                     }
                 }

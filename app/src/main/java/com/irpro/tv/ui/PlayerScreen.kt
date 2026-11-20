@@ -28,6 +28,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -98,6 +99,8 @@ fun LivePlayerScreen(
     LaunchedEffect(toast) { if (toast != null) { delay(2000); toast = null } }
     LaunchedEffect(Unit) { while (true) { clock = hhmm(System.currentTimeMillis()); delay(15_000) } }
     LaunchedEffect(quick) { if (!quick) runCatching { focus.requestFocus() } }
+    val refocus by UiEvents.refocus.collectAsState()
+    LaunchedEffect(refocus) { if (refocus > 0 && !quick) runCatching { focus.requestFocus() } }
 
     fun zap(d: Int) {
         val i = list.indexOfFirst { it.id == current.id }.let { if (it < 0) 0 else it }
@@ -205,21 +208,23 @@ private fun QuickList(
     onCategory: (String) -> Unit, onPick: (Channel, String) -> Unit, modifier: Modifier,
 ) {
     val cats = remember(catalog) { listOf(CAT_FAV to "Favoris", CAT_RECENT to "Récentes") + catalog.liveCategories.map { it.id to it.name } }
-    var ci by remember { mutableIntStateOf(cats.indexOfFirst { it.first == catId }.coerceAtLeast(0)) }
-    val chans = remember(ci) { channelsFor(catalog, playlist, cats[ci].first) }
+    var ciRaw by remember(catalog) { mutableIntStateOf(cats.indexOfFirst { it.first == catId }.coerceAtLeast(0)) }
+    val ci = ciRaw.coerceIn(0, (cats.size - 1).coerceAtLeast(0))
+    val chans = remember(ci, catalog) { channelsFor(catalog, playlist, cats[ci].first) }
     val state = rememberLazyListState()
     val first = remember { FocusRequester() }
     LaunchedEffect(ci) {
         val i = chans.indexOfFirst { it.id == current.id }.coerceAtLeast(0)
-        if (chans.isNotEmpty()) { state.scrollToItem((i - 3).coerceAtLeast(0)); delay(30); runCatching { first.requestFocus() } }
+        if (chans.isNotEmpty()) state.scrollToItem((i - 3).coerceAtLeast(0))
+        delay(30); runCatching { first.requestFocus() }
     }
     Column(
         modifier.fillMaxHeight().width(400.dp).background(Color(0xF0050A1C)).border(1.dp, Color(0x4D22D3EE)).padding(vertical = 14.dp)
             .onPreviewKeyEvent { e ->
                 if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 when (e.key) {
-                    Key.DirectionLeft -> { ci = (ci - 1 + cats.size) % cats.size; onCategory(cats[ci].first); true }
-                    Key.DirectionRight -> { ci = (ci + 1) % cats.size; onCategory(cats[ci].first); true }
+                    Key.DirectionLeft -> { ciRaw = (ci - 1 + cats.size) % cats.size; onCategory(cats[ciRaw].first); true }
+                    Key.DirectionRight -> { ciRaw = (ci + 1) % cats.size; onCategory(cats[ciRaw].first); true }
                     else -> false
                 }
             },
@@ -312,6 +317,9 @@ fun VodPlayerScreen(
 
     LaunchedEffect(item.id) { if (askResume == null) start(if (index == startIndex && startMs != null) startMs else 0) }
     pb.onEnded = { if (next != null && settings.autoNextEpisode && !nextDismissed) goNext() else { save(); onExit() } }
+    pb.onBackground = { save() }
+    val refocus by UiEvents.refocus.collectAsState()
+    LaunchedEffect(refocus) { if (refocus > 0 && !panel && askResume == null) runCatching { if (showControls) playFocus.requestFocus() else rootFocus.requestFocus() } }
     DisposableEffect(item.id) { onDispose { save() } }
 
     // Suivi de la position + sauvegarde toutes les 10 s + carte « épisode suivant »
@@ -320,7 +328,7 @@ fun VodPlayerScreen(
         while (started) {
             pos = pb.engine.position(); dur = pb.engine.duration(); playing = pb.engine.isPlaying()
             if (++tick % 20 == 0) save()
-            if (next != null && dur > 60_000 && dur - pos in 1..20_000 && !nextDismissed && nextCountdown == null) nextCountdown = 10
+            if (next != null && settings.autoNextEpisode && dur > 60_000 && dur - pos in 1..20_000 && !nextDismissed && nextCountdown == null) nextCountdown = 10
             delay(500)
         }
     }
@@ -350,12 +358,21 @@ fun VodPlayerScreen(
     Box(
         Modifier.fillMaxSize().background(Color.Black)
             .focusRequester(rootFocus).focusable()
-            .onKeyEvent { e ->
-                if (showControls || panel || askResume != null || e.type != KeyEventType.KeyDown) return@onKeyEvent false
+            .onPreviewKeyEvent { e ->
+                // Touches média de la télécommande : toujours actives
+                if (e.type != KeyEventType.KeyDown || askResume != null) return@onPreviewKeyEvent false
                 when (e.key) {
-                    Key.DirectionLeft, Key.MediaRewind -> { seekBy(if (e.nativeKeyEvent.repeatCount > 3) -30_000 else -10_000); true }
-                    Key.DirectionRight, Key.MediaFastForward -> { seekBy(if (e.nativeKeyEvent.repeatCount > 3) 30_000 else 10_000); true }
                     Key.MediaPlayPause, Key.MediaPlay, Key.MediaPause -> { if (pb.engine.isPlaying()) pb.engine.pause() else pb.engine.resume(); controls++; true }
+                    Key.MediaRewind -> { seekBy(-10_000); controls++; true }
+                    Key.MediaFastForward -> { seekBy(10_000); controls++; true }
+                    else -> false
+                }
+            }
+            .onKeyEvent { e ->
+                if (showControls || panel || askResume != null || nextCountdown != null || e.type != KeyEventType.KeyDown) return@onKeyEvent false
+                when (e.key) {
+                    Key.DirectionLeft -> { seekBy(if (e.nativeKeyEvent.repeatCount > 3) -30_000 else -10_000); true }
+                    Key.DirectionRight -> { seekBy(if (e.nativeKeyEvent.repeatCount > 3) 30_000 else 10_000); true }
                     else -> if (isCenter(e.key) || e.key == Key.DirectionUp || e.key == Key.DirectionDown) { controls++; true } else false
                 }
             }
@@ -388,22 +405,27 @@ fun VodPlayerScreen(
                     if (dur > 0) Text("${clockTime(dur)} · fin à ${hhmm(System.currentTimeMillis() + (dur - pos))}", color = Color(0xFFCCD2E0), fontSize = 13.sp)
                 }
                 Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
-                    if (prev != null) CtlButton("⏮") { save(); index-- }
-                    CtlButton("−10") { seekBy(-10_000); controls++ }
-                    CtlButton(if (playing) "❚❚" else "▶", big = true, modifier = Modifier.focusRequester(playFocus)) {
+                    val bump = { controls++ }
+                    if (prev != null) CtlButton("⏮", onFocus = bump) { save(); index-- }
+                    CtlButton("−10", onFocus = bump) { seekBy(-10_000); controls++ }
+                    CtlButton(if (playing) "❚❚" else "▶", big = true, modifier = Modifier.focusRequester(playFocus), onFocus = bump) {
                         if (pb.engine.isPlaying()) pb.engine.pause() else pb.engine.resume(); controls++
                     }
-                    CtlButton("+10") { seekBy(10_000); controls++ }
-                    if (next != null) CtlButton("⏭") { goNext() }
+                    CtlButton("+10", onFocus = bump) { seekBy(10_000); controls++ }
+                    if (next != null) CtlButton("⏭", onFocus = bump) { goNext() }
                     Spacer(Modifier.width(30.dp))
-                    CtlButton("Langue / Sous-titres") { panel = true }
+                    CtlButton("Langue / Sous-titres", onFocus = bump) { panel = true }
                 }
             }
         }
 
-        if (panel) TracksPanel(pb.engine.audioTracks(), pb.engine.subtitleTracks(),
-            onAudio = { pb.engine.selectAudio(it) }, onSub = { pb.engine.selectSubtitle(it) },
-            modifier = Modifier.align(Alignment.CenterEnd))
+        if (panel) {
+            var tr by remember { mutableIntStateOf(0) }
+            LaunchedEffect(tr) { if (tr > 0) { delay(400); tr = -tr } }   // relit les pistes après le changement
+            TracksPanel(remember(tr) { pb.engine.audioTracks() }, remember(tr) { pb.engine.subtitleTracks() },
+                onAudio = { pb.engine.selectAudio(it); tr = kotlin.math.abs(tr) + 1 }, onSub = { pb.engine.selectSubtitle(it); tr = kotlin.math.abs(tr) + 1 },
+                modifier = Modifier.align(Alignment.CenterEnd))
+        }
 
         askResume?.let { r ->
             ResumeDialog(clockTime(r.pos), onResume = { start(r.pos) }, onRestart = { start(0) }, modifier = Modifier.align(Alignment.Center))
@@ -415,7 +437,7 @@ fun VodPlayerScreen(
 }
 
 @Composable
-private fun CtlButton(text: String, big: Boolean = false, modifier: Modifier = Modifier, onClick: () -> Unit) {
+private fun CtlButton(text: String, big: Boolean = false, modifier: Modifier = Modifier, onFocus: () -> Unit = {}, onClick: () -> Unit) {
     var f by remember { mutableStateOf(false) }
     Box(
         modifier
@@ -423,7 +445,7 @@ private fun CtlButton(text: String, big: Boolean = false, modifier: Modifier = M
             .clip(if (big) CircleShape else RoundedCornerShape(21.dp))
             .background(if (f) IrColors.Violet else if (big) Color(0xFF3A2A7A) else Color(0x26FFFFFF))
             .border(if (f) 2.dp else 0.dp, if (f) IrColors.Cyan else Color.Transparent, if (big) CircleShape else RoundedCornerShape(21.dp))
-            .onFocusChanged { f = it.isFocused }
+            .onFocusChanged { if (it.isFocused && !f) onFocus(); f = it.isFocused }
             .clickable(onClick = onClick)
             .padding(horizontal = if (big) 0.dp else 16.dp),
         contentAlignment = Alignment.Center,
@@ -496,13 +518,13 @@ private fun TracksPanel(audio: List<TrackOpt>, subs: List<TrackOpt>, onAudio: (S
 @Composable
 private fun OptRow(label: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
     var f by remember { mutableStateOf(false) }
-    var picked by remember(selected) { mutableStateOf(selected) }
+    val picked = selected
     Row(
         modifier.fillMaxWidth().padding(vertical = 3.dp).clip(RoundedCornerShape(8.dp))
             .background(if (f) IrColors.Violet else Color(0xFF12204A))
             .border(if (f) 2.dp else 0.dp, if (f) IrColors.Cyan else Color.Transparent, RoundedCornerShape(8.dp))
             .onFocusChanged { f = it.isFocused }
-            .clickable { picked = true; onClick() }
+            .clickable { onClick() }
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

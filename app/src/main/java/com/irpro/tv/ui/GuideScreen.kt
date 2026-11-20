@@ -34,6 +34,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -78,7 +83,8 @@ fun GuideScreen(
     val focusId = remember(catIdx) { channels.firstOrNull { it.id == focusChannel }?.id ?: channels.firstOrNull()?.id }
     var selected by remember { mutableStateOf<Pair<Channel, Program?>?>(null) }
     var toast by remember { mutableStateOf<String?>(null) }
-    val now = System.currentTimeMillis()
+    var now by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) { while (true) { delay(60_000); now = System.currentTimeMillis() } }
     val windowStart = now - (now % 1_800_000L)   // demi-heure en cours
     val windowEnd = windowStart + WINDOW_H * 3_600_000L
     val listState = rememberLazyListState()
@@ -102,7 +108,18 @@ fun GuideScreen(
             Spacer(Modifier.width(10.dp))
             Text("Guide TV", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.width(18.dp))
-            IrButton("◀  ${cats.getOrNull(catIdx)?.second ?: ""}  ▶", primary = false, onClick = { catIdx = (catIdx + 1) % cats.size })
+            IrButton(
+                "◀  ${cats.getOrNull(catIdx)?.second ?: ""}  ▶", primary = false,
+                modifier = Modifier.onPreviewKeyEvent { e ->
+                    if (e.type != KeyEventType.KeyDown) false
+                    else when (e.key) {
+                        Key.DirectionLeft -> { catIdx = (catIdx - 1 + cats.size) % cats.size; true }
+                        Key.DirectionRight -> { catIdx = (catIdx + 1) % cats.size; true }
+                        else -> false
+                    }
+                },
+                onClick = { catIdx = (catIdx + 1) % cats.size },
+            )
             Spacer(Modifier.weight(1f))
             Text("Aujourd'hui · ${hhmm(now)}", color = IrColors.TextDim, fontSize = 14.sp)
         }
@@ -125,18 +142,18 @@ fun GuideScreen(
                                     Text("${ch.num}  ${ch.name}", color = Color.White, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                                         modifier = Modifier.width(CH_COL).fillMaxHeight().padding(end = 4.dp).background(Color(0xFF12204A), RoundedCornerShape(6.dp)).padding(horizontal = 8.dp, vertical = 11.dp))
                                     Box(Modifier.width(gridW).fillMaxHeight()) {
-                                        if (progs.isEmpty()) {
-                                            GuideCell("Programme non communiqué", 0.dp, gridW, ch.id == focusId, firstFocus,
-                                                onFocus = { selected = ch to null }, onClick = { onPlay(ch, catId) })
-                                        } else progs.forEachIndexed { pi, p ->
+                                        // Une seule liste de cases (case « non communiqué » comprise) : le focus ne saute pas quand le guide arrive
+                                        val unknown = progs.isEmpty()
+                                        val cells = if (unknown) listOf(Program("Programme non communiqué", windowStart, windowEnd)) else progs
+                                        cells.forEachIndexed { pi, p ->
                                             val s = maxOf(p.start, windowStart); val e = minOf(p.end, windowEnd)
                                             val x = ((s - windowStart) * pxPerMs).dp
                                             val w = (((e - s) * pxPerMs).dp - 3.dp).coerceAtLeast(20.dp)
                                             val isFirst = pi == 0 && ch.id == focusId
-                                            GuideCell(p.title, x, w, isFirst, firstFocus, live = p.isNow(),
-                                                onFocus = { selected = ch to p },
+                                            GuideCell(p.title, x, w, isFirst, firstFocus, live = !unknown && p.isNow(),
+                                                onFocus = { selected = ch to if (unknown) null else p },
                                                 onClick = {
-                                                    if (p.isNow() || p.start < now) onPlay(ch, catId)
+                                                    if (unknown || p.isNow() || p.start < now) onPlay(ch, catId)
                                                     else { Reminders.add(Reminders.R(ch.id, p.title, p.start)); toast = "Rappel ajouté : ${p.title} à ${hhmm(p.start)}" }
                                                 })
                                         }

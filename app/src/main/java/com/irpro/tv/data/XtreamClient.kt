@@ -13,7 +13,11 @@ import java.net.URLEncoder
 object Net {
     private const val UA = "IRPROTV/1.0 (Android TV)"
 
-    fun <T> open(start: String, read: (BufferedReader) -> T): T {
+    fun <T> open(start: String, read: (BufferedReader) -> T): T =
+        openStream(start) { BufferedReader(InputStreamReader(it, Charsets.UTF_8), 64 * 1024).use(read) }
+
+    /** Ouvre une adresse en suivant les redirections (y compris http <-> https). */
+    fun <T> openStream(start: String, read: (java.io.InputStream) -> T): T {
         var url = start
         repeat(6) {
             val c = (URL(url).openConnection() as HttpURLConnection).apply {
@@ -29,7 +33,7 @@ object Net {
                     return@repeat
                 }
                 if (code !in 200..299) throw IOException("HTTP $code")
-                return BufferedReader(InputStreamReader(c.inputStream, Charsets.UTF_8), 64 * 1024).use(read)
+                return c.inputStream.use(read)
             } finally {
                 c.disconnect()
             }

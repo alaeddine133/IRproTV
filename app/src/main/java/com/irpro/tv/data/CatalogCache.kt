@@ -13,7 +13,7 @@ class CatalogCache(context: Context) {
     fun delete(id: String) { file(id).delete() }
 
     fun write(id: String, c: Catalog) {
-        val tmp = File(dir, "tmp.json")
+        val tmp = File(dir, "${file(id).name}.tmp")
         tmp.bufferedWriter().use { bw ->
             JsonWriter(bw).use { w ->
                 w.beginObject()
@@ -48,7 +48,8 @@ class CatalogCache(context: Context) {
                 w.endObject()
             }
         }
-        tmp.renameTo(file(id))
+        val dest = file(id)
+        if (!tmp.renameTo(dest)) { tmp.copyTo(dest, overwrite = true); tmp.delete() }
     }
 
     fun read(id: String): Catalog? {

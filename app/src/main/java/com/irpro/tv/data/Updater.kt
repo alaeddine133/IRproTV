@@ -45,7 +45,9 @@ object Updater {
 
     /** Télécharge l'APK (progression 0..1) puis renvoie le fichier. */
     suspend fun download(ctx: Context, info: UpdateInfo, progress: (Float) -> Unit): File = withContext(Dispatchers.IO) {
-        val dir = File(ctx.cacheDir, "update").apply { mkdirs(); listFiles()?.forEach { it.delete() } }
+        // Android 6 n'accepte pas les fichiers partagés « content:// » : dossier externe de l'appli
+        val base = if (Build.VERSION.SDK_INT < 24) (ctx.getExternalFilesDir(null) ?: ctx.cacheDir) else ctx.cacheDir
+        val dir = File(base, "update").apply { mkdirs(); listFiles()?.forEach { it.delete() } }
         val out = File(dir, "IRPRO-TV-${info.versionName}.apk")
         fun open(u: String) = (URL(u).openConnection() as HttpURLConnection).apply {
             instanceFollowRedirects = false; connectTimeout = 15_000; readTimeout = 30_000
@@ -82,11 +84,12 @@ object Updater {
     }
 
     /** Lance l'installateur Android (l'utilisateur appuie sur « Installer »). */
-    fun install(ctx: Context, apk: File) {
-        val uri = FileProvider.getUriForFile(ctx, "${ctx.packageName}.files", apk)
+    fun install(ctx: Context, apk: File): Boolean = runCatching {
+        val uri = if (Build.VERSION.SDK_INT < 24) Uri.fromFile(apk) else FileProvider.getUriForFile(ctx, "${ctx.packageName}.files", apk)
         ctx.startActivity(
             Intent(Intent.ACTION_VIEW).setDataAndType(uri, "application/vnd.android.package-archive")
                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
         )
-    }
+        true
+    }.getOrDefault(false)
 }

@@ -25,6 +25,17 @@ class Playback(private val ctx: Context) {
     var ready by mutableStateOf(false); private set
     var error by mutableStateOf<String?>(null); private set
     var onEnded: (() -> Unit)? = null
+    /** Appelé quand l'appli passe en arrière-plan (sauvegarde de la reprise). */
+    var onBackground: (() -> Unit)? = null
+    private var stopped = false
+
+    fun onStop() { if (stopped) return; stopped = true; onBackground?.invoke(); runCatching { engine.pause() } }
+    fun onStart() {
+        if (!stopped) return
+        stopped = false
+        if (url.isEmpty()) return
+        if (engine.duration() > 0) engine.resume() else engine.play(url)   // direct : on reprend le direct
+    }
 
     private var url = ""
     private var fallbackTried = false
@@ -36,7 +47,7 @@ class Playback(private val ctx: Context) {
         override fun onError(msg: String) {
             if (!fallbackTried && url.isNotEmpty()) {
                 fallbackTried = true
-                val pos = engine.position()
+                val pos = if (engine.duration() > 0) engine.position() else 0L   // direct : on repart du direct
                 val useVlc = engine is ExoEngine
                 engine.listener = null
                 engine.release()
@@ -63,7 +74,18 @@ class Playback(private val ctx: Context) {
 fun rememberPlayback(): Playback {
     val ctx = LocalContext.current
     val pb = remember { Playback(ctx) }
-    DisposableEffect(pb) { onDispose { pb.release() } }
+    val owner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+    DisposableEffect(pb, owner) {
+        val obs = androidx.lifecycle.LifecycleEventObserver { _, e ->
+            when (e) {
+                androidx.lifecycle.Lifecycle.Event.ON_STOP -> pb.onStop()
+                androidx.lifecycle.Lifecycle.Event.ON_START -> pb.onStart()
+                else -> Unit
+            }
+        }
+        owner.lifecycle.addObserver(obs)
+        onDispose { owner.lifecycle.removeObserver(obs); pb.release() }
+    }
     return pb
 }
 

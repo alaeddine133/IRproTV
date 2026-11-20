@@ -323,6 +323,8 @@ fun PlaylistReadyScreen(
     onAdd: () -> Unit,
     onDelete: () -> Unit,
     onBack: () -> Unit,
+    others: List<Playlist> = emptyList(),
+    onSwitch: (Playlist) -> Unit = {},
 ) {
     BackHandler(onBack = onBack)
     val first = remember { FocusRequester() }
@@ -376,6 +378,14 @@ fun PlaylistReadyScreen(
                     primary = false,
                     onClick = { if (confirmDelete) { confirmDelete = false; onDelete() } else confirmDelete = true },
                 )
+            }
+            if (others.isNotEmpty()) {
+                Spacer(Modifier.height(18.dp))
+                Text("Changer de playlist", color = IrColors.Cyan, fontSize = 14.sp)
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    others.forEach { o -> IrButton("Utiliser « ${o.name} »", primary = false, onClick = { onSwitch(o) }) }
+                }
             }
             Spacer(Modifier.height(18.dp))
             Text("Paramètres · Mes playlists", color = Color(0xFFC9C9D1), fontSize = 13.sp)

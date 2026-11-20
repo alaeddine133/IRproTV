@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -55,6 +56,7 @@ import com.irpro.tv.ui.PhoneAddScreen
 import com.irpro.tv.ui.PlaylistReadyScreen
 import com.irpro.tv.ui.Reminders
 import com.irpro.tv.ui.SearchScreen
+import com.irpro.tv.ui.UiEvents
 import com.irpro.tv.ui.Section
 import com.irpro.tv.ui.SeriesDetailScreen
 import com.irpro.tv.ui.SettingsScreen
@@ -74,7 +76,10 @@ class MainActivity : ComponentActivity() {
         com.irpro.tv.ui.Sfx.init(this)
         // L'écran ne se met pas en veille pendant qu'on regarde
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        setContent { App() }
+        setContent {
+            // Téléphones Android 15 : le contenu ne passe pas sous les barres du système
+            Box(Modifier.fillMaxSize().background(Color.Black).safeDrawingPadding()) { App() }
+        }
     }
 }
 
@@ -104,20 +109,22 @@ fun App() {
     val nav = remember { Nav() }
     var update by remember { mutableStateOf<UpdateInfo?>(null) }
     var updateChecked by remember { mutableStateOf(false) }
-    var reminder by remember { mutableStateOf<Reminders.R?>(null) }
+    val reminders = remember { androidx.compose.runtime.mutableStateListOf<Reminders.R>() }
+    val reminder = reminders.firstOrNull()
+    val epgRev by Epg.rev.collectAsState()
 
     // Contenu rechargé pendant l'intro (réglage « à chaque lancement »)
     LaunchedEffect(Unit) {
-        store.active()?.let { if (content.playlistId != it.id) ContentRepository.load(ctx, it, refresh = settings.refreshOnLaunch) }
+        store.active()?.let { if (ContentRepository.requestedId != it.id) ContentRepository.load(ctx, it, refresh = settings.refreshOnLaunch) }
     }
     // Guide XMLTV (listes M3U, ou lien personnalisé)
-    LaunchedEffect(content.catalog, settings.epgUrl) {
+    LaunchedEffect(content.catalog, settings.epgUrl, settings.epgOffsetHours, epgRev) {
         val c = content.catalog ?: return@LaunchedEffect
         val link = settings.epgUrl.ifBlank { c.epgUrl }
         if (link.isNotBlank()) Epg.loadXmltv(link, c.channels)
     }
     // Rappels du guide
-    LaunchedEffect(Unit) { while (true) { delay(30_000); Reminders.due().firstOrNull()?.let { reminder = it } } }
+    LaunchedEffect(Unit) { while (true) { delay(30_000); reminders.addAll(Reminders.due()) } }
 
     fun afterIntro() = if (store.hasAny()) "home" else "welcome"
 
@@ -139,11 +146,28 @@ fun App() {
         else -> {
             val active = remember(version) { store.active() }
             val catalog = content.catalog
+            val playlistsScreen: @Composable (Playlist) -> Unit = { a ->
+                PlaylistReadyScreen(
+                    playlist = a, count = remember(version) { store.all().size }, state = content,
+                    onRefresh = { if (!content.loading) ContentRepository.load(ctx, a, refresh = true) },
+                    onAdd = { screen = "welcome" },
+                    onDelete = {
+                        ContentRepository.clear(ctx, a.id); store.delete(a.id); version++
+                        store.active()?.let { ContentRepository.load(ctx, it, refresh = true) }
+                        screen = afterIntro()
+                    },
+                    onBack = { screen = if (content.catalog != null && content.playlistId == a.id) "settings" else "home" },
+                    others = remember(version) { store.all().filter { it.id != a.id } },
+                    onSwitch = { o -> store.setActive(o.id); version++; ContentRepository.load(ctx, o, refresh = false); screen = "home" },
+                )
+            }
             if (active == null) {
                 LaunchedEffect(Unit) { screen = "welcome" }
+            } else if (screen == "playlists") {
+                playlistsScreen(active)
             } else if (catalog == null || content.playlistId != active.id) {
-                LaunchedEffect(active.id) { if (content.playlistId != active.id) ContentRepository.load(ctx, active, refresh = true) }
-                LoadingScreen(state = content, onRetry = { ContentRepository.load(ctx, active, refresh = true) }, onPlaylists = { screen = "welcome" })
+                LaunchedEffect(active.id) { if (ContentRepository.requestedId != active.id) ContentRepository.load(ctx, active, refresh = true) }
+                LoadingScreen(state = content, onRetry = { ContentRepository.load(ctx, active, refresh = true) }, onPlaylists = { screen = "playlists" })
             } else {
                 val byId = remember(catalog) { catalog.channels.associateBy { it.id } }
                 fun playChannel(ch: Channel, cat: String, back: String) {
@@ -153,21 +177,10 @@ fun App() {
                 fun openSeries(id: String, back: String) { nav.detailBack = back; screen = "show:$id" }
 
                 when {
-                    screen == "playlists" -> PlaylistReadyScreen(
-                        playlist = active, count = remember(version) { store.all().size }, state = content,
-                        onRefresh = { ContentRepository.load(ctx, active, refresh = true) },
-                        onAdd = { screen = "welcome" },
-                        onDelete = {
-                            ContentRepository.clear(ctx, active.id); store.delete(active.id); version++
-                            store.active()?.let { ContentRepository.load(ctx, it, refresh = true) }
-                            screen = afterIntro()
-                        },
-                        onBack = { screen = "settings" },
-                    )
                     screen == "settings" -> SettingsScreen(
                         playlist = active, playlistsCount = remember(version) { store.all().size }, state = content,
                         onPlaylists = { screen = "playlists" },
-                        onRefresh = { ContentRepository.load(ctx, active, refresh = true) },
+                        onRefresh = { if (!content.loading) ContentRepository.load(ctx, active, refresh = true) },
                         onCheckUpdate = { updateChecked = false; screen = "home" },
                         onBack = { screen = "home" },
                     )
@@ -265,7 +278,7 @@ fun App() {
                         )
                         // Nouvelle version de l'appli ? (vérifié en arrivant sur l'accueil)
                         LaunchedEffect(updateChecked) {
-                            if (!updateChecked) { updateChecked = true; delay(2500); update = Updater.check() }
+                            if (!updateChecked) { delay(2500); update = Updater.check(); updateChecked = true }
                         }
                         update?.let { UpdateDialog(it, onLater = { update = null }) }
                     }
@@ -274,7 +287,9 @@ fun App() {
                 // Rappel d'un programme qui commence
                 reminder?.let { r ->
                     val ch = byId[r.channelId]
-                    ReminderBanner(r.title, ch?.name ?: "", onWatch = { reminder = null; ch?.let { playChannel(it, it.categoryId, "home") } }, onClose = { reminder = null })
+                    ReminderBanner(r, ch?.name ?: "",
+                        onWatch = { reminders.remove(r); UiEvents.requestRefocus(); ch?.let { playChannel(it, it.categoryId, "home") } },
+                        onClose = { reminders.remove(r); UiEvents.requestRefocus() })
                 }
             }
         }
@@ -282,10 +297,12 @@ fun App() {
 }
 
 @Composable
-private fun ReminderBanner(title: String, channel: String, onWatch: () -> Unit, onClose: () -> Unit) {
-    val f = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { f.requestFocus() } }
-    LaunchedEffect(Unit) { delay(20_000); onClose() }
+private fun ReminderBanner(r: Reminders.R, channel: String, onWatch: () -> Unit, onClose: () -> Unit) {
+    val title = r.title
+    val f = remember(r) { FocusRequester() }
+    androidx.activity.compose.BackHandler(onBack = onClose)
+    LaunchedEffect(r) { runCatching { f.requestFocus() } }
+    LaunchedEffect(r) { delay(20_000); onClose() }
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
         Column(
             Modifier.padding(top = 24.dp).background(Color(0xF0050A1C), RoundedCornerShape(16.dp))

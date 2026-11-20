@@ -112,10 +112,17 @@ fun VodCatalogScreen(
 ) {
     BackHandler(onBack = onBack)
     val rev by UserData.rev.collectAsState()
-    val shelves = remember(catalog, rev, series) { buildShelves(playlist, catalog, series) }
-    var hero by remember { mutableStateOf(shelves.firstOrNull()?.items?.firstOrNull()) }
+    // Rangées calculées hors de l'écran (rapide même avec des dizaines de milliers de titres)
+    val shelves by androidx.compose.runtime.produceState(emptyList<Shelf>(), catalog, rev, series) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { buildShelves(playlist, catalog, series) }
+    }
+    var hero by remember { mutableStateOf<Poster?>(null) }
     val first = remember { FocusRequester() }
-    LaunchedEffect(Unit) { delay(60); runCatching { first.requestFocus() } }
+    var focusedOnce by remember { mutableStateOf(false) }
+    LaunchedEffect(shelves) {
+        if (hero == null) hero = shelves.firstOrNull()?.items?.firstOrNull()
+        if (!focusedOnce && shelves.isNotEmpty()) { delay(60); runCatching { first.requestFocus() }; focusedOnce = true }
+    }
     val heroSeries = remember(hero) { if (series) catalog.series.firstOrNull { it.id == hero?.id } else null }
 
     Box(Modifier.fillMaxSize().background(IrColors.Night)) {
@@ -147,7 +154,7 @@ fun VodCatalogScreen(
                             if (shelf.total > shelf.items.size) Text("  · ${formatCount(shelf.total)}", color = IrColors.TextDim, fontSize = 13.sp)
                         }
                         LazyRow(contentPadding = PaddingValues(horizontal = 40.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                            itemsIndexed(shelf.items, key = { _, p -> p.id }) { i, p ->
+                            itemsIndexed(shelf.items.distinctBy { it.id }, key = { _, p -> p.id }) { i, p ->
                                 PosterCard(p, if (si == 0 && i == 0) Modifier.focusRequester(first) else Modifier, onFocus = { hero = p }) { onOpen(p.id) }
                             }
                             if (shelf.categoryId != null && shelf.total > shelf.items.size) item {
@@ -216,7 +223,7 @@ fun VodGridScreen(playlist: Playlist, catalog: Catalog, series: Boolean, categor
         Spacer(Modifier.height(14.dp))
         LazyVerticalGrid(GridCells.Adaptive(140.dp), verticalArrangement = Arrangement.spacedBy(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = PaddingValues(6.dp, 6.dp, 6.dp, 40.dp)) {
-            itemsIndexed(items, key = { _, p -> p.id }) { i, p ->
+            itemsIndexed(items.distinctBy { it.id }, key = { _, p -> p.id }) { i, p ->
                 PosterCard(p, if (i == 0) Modifier.focusRequester(first) else Modifier) { onOpen(p.id) }
             }
         }
@@ -282,7 +289,9 @@ fun SeriesDetailScreen(
     var season by remember(det) { mutableIntStateOf(eps.firstOrNull { it.id == resume?.id }?.season ?: det?.seasons?.firstOrNull() ?: 1) }
     val inList = remember(rev) { series.id in UserData.myList(playlist.id) }
     val first = remember { FocusRequester() }
-    LaunchedEffect(det) { if (det != null) { delay(60); runCatching { first.requestFocus() } } }
+    val listBtn = remember { FocusRequester() }
+    LaunchedEffect(Unit) { delay(60); runCatching { listBtn.requestFocus() } }      // pendant le chargement
+    LaunchedEffect(det) { if (det != null && det.episodes.isNotEmpty()) { delay(60); runCatching { first.requestFocus() } } }
 
     DetailFrame(backdrop = det?.let { it.backdrop.ifBlank { it.cover } }?.ifBlank { null } ?: series.cover) {
         Row(Modifier.fillMaxSize()) {
@@ -311,7 +320,7 @@ fun SeriesDetailScreen(
                         val e = eps[nextUnseen]
                         IrButton("▶  Regarder S${e.season} · E${e.number}", modifier = Modifier.focusRequester(first)) { onPlay(eps, nextUnseen, null) }
                     }
-                    IrButton(if (inList) "✓ Ma liste" else "+ Ma liste", primary = false) { UserData.toggleMyList(playlist.id, series.id) }
+                    IrButton(if (inList) "✓ Ma liste" else "+ Ma liste", primary = false, modifier = Modifier.focusRequester(listBtn)) { UserData.toggleMyList(playlist.id, series.id) }
                 }
                 Spacer(Modifier.height(16.dp))
                 if (det != null && det.seasons.size > 1) LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -335,7 +344,7 @@ fun SeriesDetailScreen(
             ) {
                 val list = eps.withIndex().filter { it.value.season == season }
                 if (det != null && list.isEmpty()) item { Text("Aucun épisode fourni par le serveur.", color = IrColors.TextDim, modifier = Modifier.padding(12.dp)) }
-                items(list, key = { it.value.id }) { (idx, e) ->
+                items(list.distinctBy { it.value.id }, key = { it.value.id }) { (idx, e) ->
                     var f by remember { mutableStateOf(false) }
                     val r = remember(rev) { UserData.resumeOf(playlist.id, e.id) }
                     Row(

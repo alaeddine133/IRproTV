@@ -26,8 +26,10 @@ data class Program(val title: String, val start: Long, val end: Long, val desc: 
  */
 object Epg {
     private val cache = ConcurrentHashMap<String, Pair<Long, List<Program>>>()
-    private var xmltv: Map<String, List<Program>> = emptyMap()
-    private var xmltvLoadedFor: String? = null
+    @Volatile private var xmltv: Map<String, List<Program>> = emptyMap()
+    @Volatile private var xmltvLoadedFor: String? = null
+    /** Change quand le guide doit être rechargé (réglages modifiés). */
+    val rev = kotlinx.coroutines.flow.MutableStateFlow(0)
 
     private fun offset() = UserData.settings.value.epgOffsetHours * 3_600_000L
 
@@ -83,15 +85,14 @@ object Epg {
         val from = now - 3 * 3_600_000L; val to = now + 24 * 3_600_000L
         val fmt = SimpleDateFormat("yyyyMMddHHmmss Z", Locale.US)
         val res = HashMap<String, MutableList<Program>>()
-        runCatching {
-            val conn = java.net.URL(link).openConnection() as java.net.HttpURLConnection
-            conn.connectTimeout = 15_000; conn.readTimeout = 60_000
-            conn.setRequestProperty("User-Agent", "IRPROTV/1.0 (Android TV)")
-            val raw = conn.inputStream.buffered()
+        val fmt2 = SimpleDateFormat("yyyyMMddHHmmss", Locale.US)
+        fun date(v: String?): Long = v?.trim()?.let { t -> runCatching { fmt.parse(t)!!.time }.getOrNull() ?: runCatching { fmt2.parse(t.take(14))!!.time }.getOrNull() } ?: 0L
+        runCatching { Net.openStream(link) { stream ->
+            val raw = stream.buffered()
             raw.mark(4)
             val gz = raw.read() == 0x1f && raw.read() == 0x8b
             raw.reset()
-            val input = if (gz || link.endsWith(".gz")) GZIPInputStream(raw) else raw
+            val input = if (gz) GZIPInputStream(raw) else raw
             input.use { ins ->
                 val x = Xml.newPullParser()
                 x.setInput(ins, null)
@@ -102,8 +103,8 @@ object Epg {
                             tag = x.name
                             if (tag == "programme") {
                                 ch = x.getAttributeValue(null, "channel") ?: ""
-                                s = runCatching { fmt.parse(x.getAttributeValue(null, "start"))!!.time }.getOrDefault(0)
-                                e = runCatching { fmt.parse(x.getAttributeValue(null, "stop"))!!.time }.getOrDefault(0)
+                                s = date(x.getAttributeValue(null, "start"))
+                                e = date(x.getAttributeValue(null, "stop"))
                                 title = ""; desc = ""; inProg = ch in wanted && e > from && s < to
                             }
                         }
@@ -121,7 +122,7 @@ object Epg {
                     }
                 }
             }
-        }
+        } }
         if (res.isNotEmpty()) {
             xmltv = res.mapValues { it.value.sortedBy { p -> p.start } }
             xmltvLoadedFor = link
@@ -129,5 +130,5 @@ object Epg {
         }
     }
 
-    fun clear() { cache.clear(); xmltv = emptyMap(); xmltvLoadedFor = null }
+    fun clear() { cache.clear(); xmltv = emptyMap(); xmltvLoadedFor = null; rev.value++ }
 }

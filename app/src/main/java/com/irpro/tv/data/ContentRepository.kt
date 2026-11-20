@@ -10,6 +10,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.currentCoroutineContext
 
 data class LoadState(
     val playlistId: String? = null,
@@ -35,13 +38,20 @@ object ContentRepository {
      * Affiche tout de suite la copie enregistrée, puis recharge depuis le serveur si [refresh].
      * Appelé au démarrage (pendant l'intro), après l'ajout d'une playlist et par le bouton « Mettre à jour ».
      */
+    /** Playlist demandée en dernier (connue tout de suite, avant même la lecture du cache). */
+    @Volatile var requestedId: String? = null
+        private set
+
     fun load(context: Context, playlist: Playlist, refresh: Boolean = true) {
         val app = context.applicationContext
         val cache = CatalogCache(app)
+        requestedId = playlist.id
         job?.cancel()
         job = scope.launch {
-            val cached = if (_state.value.playlistId == playlist.id && _state.value.catalog != null) _state.value.catalog
-            else cache.read(playlist.id)?.sorted()
+            fun stillWanted() = requestedId == playlist.id && isActive
+            val reuse = _state.value.playlistId == playlist.id && _state.value.catalog != null
+            val cached = if (reuse) _state.value.catalog else cache.read(playlist.id)?.sorted()
+            if (!stillWanted()) return@launch
             val doRefresh = refresh || cached == null
             _state.value = LoadState(playlist.id, cached, loading = doRefresh, step = if (doRefresh) "Connexion au serveur…" else "")
             if (!doRefresh) return@launch
@@ -50,15 +60,19 @@ object ContentRepository {
                     PlaylistType.XTREAM -> loadXtream(playlist)
                     PlaylistType.M3U -> loadM3u(playlist)
                 }
+                ensureActive()
                 if (fresh.isEmpty) throw IllegalStateException("vide")
-                cache.write(playlist.id, fresh)
+                cache.write(playlist.id, fresh)          // ordre du fournisseur conservé dans le cache
+                val sorted = fresh.sorted()
+                if (!stillWanted()) return@launch
                 _state.value = LoadState(
-                    playlist.id, fresh, loading = false,
-                    liveCount = fresh.channels.size, movieCount = fresh.movies.size, seriesCount = fresh.series.size,
+                    playlist.id, sorted, loading = false,
+                    liveCount = sorted.channels.size, movieCount = sorted.movies.size, seriesCount = sorted.series.size,
                 )
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
+                if (!stillWanted()) return@launch
                 _state.update {
                     it.copy(
                         loading = false, step = "",
@@ -70,31 +84,45 @@ object ContentRepository {
         }
     }
 
+    /** Re-trie en mémoire (réglage « Français en premier ») sans retélécharger. */
+    fun resort(context: Context) {
+        val id = _state.value.playlistId ?: return
+        scope.launch {
+            val raw = CatalogCache(context.applicationContext).read(id) ?: return@launch
+            if (_state.value.playlistId == id) _state.update { it.copy(catalog = raw.sorted()) }
+        }
+    }
+
     fun clear(context: Context, playlistId: String) {
         CatalogCache(context.applicationContext).delete(playlistId)
-        if (_state.value.playlistId == playlistId) { job?.cancel(); _state.value = LoadState() }
+        if (_state.value.playlistId == playlistId || requestedId == playlistId) { job?.cancel(); requestedId = null; _state.value = LoadState() }
     }
 
     private fun step(s: String) = _state.update { it.copy(step = s) }
 
-    private fun loadXtream(p: Playlist): Catalog {
+    private suspend fun check() = currentCoroutineContext().ensureActive()
+
+    private suspend fun loadXtream(p: Playlist): Catalog {
         val x = XtreamClient(p)
         step("Chaînes en direct…")
         val liveCats = x.liveCategories()
         val channels = x.channels()
+        check()
         _state.update { it.copy(liveCount = channels.size) }
         step("Films…")
         val movieCats = runCatching { x.movieCategories() }.getOrDefault(emptyList())
         val movies = runCatching { x.movies() }.getOrDefault(emptyList())
+        check()
         _state.update { it.copy(movieCount = movies.size) }
         step("Séries…")
         val seriesCats = runCatching { x.seriesCategories() }.getOrDefault(emptyList())
         val series = runCatching { x.series() }.getOrDefault(emptyList())
         _state.update { it.copy(seriesCount = series.size) }
-        return Catalog(liveCats, channels, movieCats, movies, seriesCats, series, System.currentTimeMillis()).sorted()
+        check()
+        return Catalog(liveCats, channels, movieCats, movies, seriesCats, series, System.currentTimeMillis())
     }
 
-    private fun loadM3u(p: Playlist): Catalog {
+    private suspend fun loadM3u(p: Playlist): Catalog {
         step("Lecture de la liste M3U…")
         val c = Net.open(p.url) { br -> M3uParser.parse(br.lineSequence()) }
         _state.update { it.copy(liveCount = c.channels.size, movieCount = c.movies.size, seriesCount = c.series.size) }

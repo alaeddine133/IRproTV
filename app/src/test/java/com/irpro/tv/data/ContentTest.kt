@@ -38,7 +38,7 @@ class ContentTest {
             #EXTINF:-1,Sans groupe
             http://srv/live/u/p/3.m3u8
         """.trimIndent()
-        val c = M3uParser.parse(m3u.lineSequence())
+        val c = M3uParser.parse(m3u.lineSequence()).sorted()
         assertEquals(3, c.channels.size)
         assertEquals("BBC One", c.channels[0].name)
         assertEquals("TF1 HD", c.channels[1].name)

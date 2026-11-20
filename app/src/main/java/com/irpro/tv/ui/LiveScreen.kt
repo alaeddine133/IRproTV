@@ -61,9 +61,9 @@ const val CAT_FAV = "__fav"
 const val CAT_RECENT = "__recent"
 
 fun channelsFor(catalog: Catalog, playlist: Playlist, catId: String): List<Channel> = when (catId) {
-    CAT_FAV -> UserData.favorites(playlist.id).let { ids -> val m = catalog.channels.associateBy { it.id }; ids.mapNotNull { m[it] } }
-    CAT_RECENT -> UserData.recents(playlist.id).let { ids -> val m = catalog.channels.associateBy { it.id }; ids.mapNotNull { m[it] } }
-    else -> catalog.channels.filter { it.categoryId == catId }
+    CAT_FAV -> UserData.favorites(playlist.id).mapNotNull { catalog.channelById[it] }.distinctBy { it.id }
+    CAT_RECENT -> UserData.recents(playlist.id).mapNotNull { catalog.channelById[it] }.distinctBy { it.id }
+    else -> catalog.channelsByCategory[catId].orEmpty()
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -79,7 +79,8 @@ fun LiveScreen(
     BackHandler(onBack = onBack)
     val rev by UserData.rev.collectAsState()
     val cats = remember(catalog) { catalog.liveCategories }
-    val counts = remember(catalog) { catalog.channels.groupingBy { it.categoryId }.eachCount() }
+    val counts = catalog.channelCountByCategory
+    val catState = rememberLazyListState()
     var catId by remember { mutableStateOf(startCategory ?: cats.firstOrNull()?.id ?: CAT_FAV) }
     val channels = remember(catId, rev, catalog) { channelsFor(catalog, playlist, catId) }
     var focused by remember { mutableStateOf<Channel?>(channels.firstOrNull { it.id == startChannel } ?: channels.firstOrNull()) }
@@ -96,21 +97,29 @@ fun LiveScreen(
         epg = Epg.forChannel(playlist, ch)
     }
     LaunchedEffect(toast) { if (toast != null) { delay(2200); toast = null } }
+    val refocus by UiEvents.refocus.collectAsState()
 
     val catFocus = remember { FocusRequester() }
+    LaunchedEffect(refocus) { if (refocus > 0) runCatching { catFocus.requestFocus() } }
     val chFocus = remember { FocusRequester() }
     val listState = rememberLazyListState()
     LaunchedEffect(Unit) {
         val i = channels.indexOfFirst { it.id == startChannel }
         if (i >= 0) { listState.scrollToItem((i - 2).coerceAtLeast(0)); delay(50); runCatching { chFocus.requestFocus() } }
-        else runCatching { catFocus.requestFocus() }
+        else {
+            // Amène la catégorie choisie à l'écran avant de lui donner le focus
+            val ci = cats.indexOfFirst { it.id == catId }
+            if (ci >= 0) catState.scrollToItem((ci + 4 - 3).coerceAtLeast(0))
+            delay(50); runCatching { catFocus.requestFocus() }
+        }
     }
 
     Box(Modifier.fillMaxSize().background(IrColors.Night)) {
         Row(Modifier.fillMaxSize()) {
             // 1) Catégories
             LazyColumn(
-                Modifier.width(250.dp).fillMaxHeight().background(Color(0xFF061026)).padding(vertical = 14.dp),
+                state = catState,
+                modifier = Modifier.width(250.dp).fillMaxHeight().background(Color(0xFF061026)).padding(vertical = 14.dp),
             ) {
                 item {
                     Text("Direct", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 18.dp, bottom = 10.dp))
@@ -241,7 +250,6 @@ private fun ChannelRow(
     onFocus: () -> Unit, onClick: () -> Unit, onLong: () -> Unit,
 ) {
     var f by remember { mutableStateOf(false) }
-    var longDone by remember { mutableStateOf(false) }
     Row(
         modifier
             .fillMaxWidth()
@@ -249,18 +257,8 @@ private fun ChannelRow(
             .background(if (f) IrColors.Violet else Color(0x0FFFFFFF))
             .border(if (f) 2.dp else 0.dp, if (f) IrColors.Cyan else Color.Transparent, RoundedCornerShape(10.dp))
             .onFocusChanged { if (it.isFocused && !f) Sfx.move(); f = it.isFocused; if (it.isFocused) onFocus() }
-            // Télécommande : appui long sur OK ou touche Menu = favori
-            .onPreviewKeyEvent { e ->
-                val center = e.key == Key.DirectionCenter || e.key == Key.Enter
-                when {
-                    e.key == Key.Menu && e.type == KeyEventType.KeyUp -> { onLong(); true }
-                    center && e.type == KeyEventType.KeyDown && e.nativeKeyEvent.repeatCount > 0 -> {
-                        if (!longDone) { longDone = true; onLong() }; true
-                    }
-                    center && e.type == KeyEventType.KeyUp && longDone -> { longDone = false; true }
-                    else -> false
-                }
-            }
+            // Télécommande : touche Menu = favori (l'appui long sur OK est géré par combinedClickable)
+            .onPreviewKeyEvent { e -> if (e.key == Key.Menu && e.type == KeyEventType.KeyUp) { onLong(); true } else false }
             .combinedClickable(onClick = onClick, onLongClick = onLong)
             .padding(horizontal = 10.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,

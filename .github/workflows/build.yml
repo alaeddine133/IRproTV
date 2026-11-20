@@ -29,7 +29,8 @@ jobs:
             echo "$KEYSTORE_BASE64" | base64 -d > app/release.keystore
             echo "Clé de signature trouvée."
           else
-            echo "::warning::Pas de clé de signature : APK signé en mode test (les mises à jour ne s'installeront pas par-dessus)."
+            echo "::error::Clé de signature absente (secret KEYSTORE_BASE64) : publication annulée pour ne pas casser les mises à jour."
+            exit 1
           fi
 
       - name: Construire l'APK

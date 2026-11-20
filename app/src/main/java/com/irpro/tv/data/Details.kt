@@ -59,7 +59,7 @@ object Details {
         if (p.type != PlaylistType.XTREAM) {
             return@withContext SeriesDetail(
                 plot = s.plot, rating = s.rating, cover = s.cover,
-                episodes = s.episodes.mapIndexed { i, e ->
+                episodes = s.episodes.distinctBy { it.url }.mapIndexed { i, e ->
                     EpisodeItem(id = e.url, season = e.season.coerceAtLeast(1), number = if (e.number > 0) e.number else i + 1, title = e.title, url = e.url)
                 },
             )
@@ -99,7 +99,7 @@ object Details {
                 rating = i.s("rating").ifBlank { s.rating },
                 cover = i.s("cover").ifBlank { s.cover },
                 backdrop = firstOf(i, "backdrop_path"),
-                episodes = eps.sortedWith(compareBy({ it.season }, { it.number })),
+                episodes = eps.distinctBy { it.id }.sortedWith(compareBy({ it.season }, { it.number })),
             )
         }.getOrDefault(SeriesDetail(plot = s.plot, rating = s.rating, cover = s.cover))
     }

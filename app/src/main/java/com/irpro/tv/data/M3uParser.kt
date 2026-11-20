@@ -16,6 +16,9 @@ object M3uParser {
         val movies = ArrayList<Movie>()
         val seriesMap = LinkedHashMap<String, Series>()
         val episodes = HashMap<String, MutableList<Episode>>()
+        // Une même adresse peut apparaître plusieurs fois : on garde des identifiants uniques et stables
+        val seen = HashMap<String, Int>()
+        fun uid(url: String): String { val n = seen.getOrDefault(url, 0); seen[url] = n + 1; return if (n == 0) url else "$url#$n" }
 
         var name: String? = null
         var logo = ""
@@ -46,7 +49,7 @@ object M3uParser {
                     when {
                         "/movie/" in lower -> {
                             val cat = movieCats.getOrPut(g) { Category("m:$g", g, Kind.MOVIE) }
-                            movies += Movie(id = line, name = title, poster = logo, categoryId = cat.id, url = line)
+                            movies += Movie(id = uid(line), name = title, poster = logo, categoryId = cat.id, url = line)
                         }
                         "/series/" in lower -> {
                             val cat = seriesCats.getOrPut(g) { Category("s:$g", g, Kind.SERIES) }
@@ -63,7 +66,7 @@ object M3uParser {
                         else -> {
                             val cat = liveCats.getOrPut(g) { Category("l:$g", g, Kind.LIVE) }
                             channels += Channel(
-                                id = line, num = channels.size + 1, name = title, logo = logo,
+                                id = uid(line), num = channels.size + 1, name = title, logo = logo,
                                 categoryId = cat.id, url = line, epgId = tvgId,
                             )
                         }
@@ -81,6 +84,6 @@ object M3uParser {
             seriesCategories = seriesCats.values.toList(), series = series,
             updatedAt = System.currentTimeMillis(),
             epgUrl = epgUrl,
-        ).sorted()
+        )
     }
 }
