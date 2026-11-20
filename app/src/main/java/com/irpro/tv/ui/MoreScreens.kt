@@ -214,15 +214,35 @@ fun SettingsScreen(
     onCheckUpdate: () -> Unit,
     onBack: () -> Unit,
     startSection: Int = 0,
+    onProfiles: () -> Unit = {},
 ) {
     BackHandler(onBack = onBack)
     val ctx = LocalContext.current
     var note by remember { mutableStateOf<String?>(null) }
     val s by UserData.settings.collectAsState()
-    val sections = listOf("Playlists", "Mises à jour", "Langue et priorité", "Lecteur", "Guide TV", "Apparence et sons", "Thème", "À propos")
+    val sections = listOf("Playlists", "Mises à jour", "Langue et priorité", "Lecteur", "Guide TV", "Apparence et sons", "Thème", "Profils", "Contrôle parental", "À propos")
     var sec by remember { mutableIntStateOf(startSection) }
     val first = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
+    val profRev by com.irpro.tv.data.Profiles.rev.collectAsState()
+    val parRev by com.irpro.tv.data.Parental.state.collectAsState()
+    var pin by remember { mutableStateOf<PinReq?>(null) }
+    var parNote by remember { mutableStateOf<String?>(null) }
+    /** Demande le code parental (s'il existe) avant une action protégée. */
+    fun guarded(why: String, action: () -> Unit) {
+        if (!com.irpro.tv.data.Parental.hasCode) action()
+        else pin = PinReq("Code parental", why) { c -> if (com.irpro.tv.data.Parental.check(c)) { action(); null } else "Code incorrect" }
+    }
+    /** Nouveau code : saisie puis confirmation. */
+    fun askNewCode() {
+        pin = PinReq("Nouveau code parental", "Choisis 4 chiffres") { c1 ->
+            pin = PinReq("Confirme le code", "Tape à nouveau les 4 chiffres") { c2 ->
+                if (c2 == c1) { com.irpro.tv.data.Parental.setCode(c1); parNote = "Code enregistré. Le contenu adulte est masqué."; null }
+                else "Les deux codes sont différents. Retape le même code."
+            }
+            null
+        }
+    }
 
     Row(Modifier.fillMaxSize().background(IrColors.Night)) {
         Column(Modifier.width(280.dp).fillMaxHeight().background(IrColors.Panel).padding(vertical = 20.dp)) {
@@ -296,6 +316,44 @@ fun SettingsScreen(
                     Spacer(Modifier.height(6.dp))
                     Text("Tes playlists, ta liste et tes réglages restent les mêmes quel que soit le thème.", color = IrColors.TextDim, fontSize = 14.sp)
                 }
+                7 -> {
+                    val profiles = remember(profRev) { com.irpro.tv.data.Profiles.all() }
+                    val cur = remember(profRev) { com.irpro.tv.data.Profiles.current() }
+                    InfoLine("Profil actuel", cur.name + if (cur.kids) " · Enfants" else "")
+                    Text("Chaque profil a sa propre liste, ses favoris, ses chaînes récentes et ses reprises.", color = IrColors.TextDim, fontSize = 14.sp)
+                    ActionRow("Changer de profil ou en ajouter un", onProfiles)
+                    profiles.forEach { p ->
+                        Spacer(Modifier.height(4.dp))
+                        Text(p.name, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                        ToggleRow("Profil Enfants (contenu adulte toujours masqué)", p.kids) { v ->
+                            guarded("Pour modifier le profil ${p.name}") { com.irpro.tv.data.Profiles.update(p.copy(kids = v)); com.irpro.tv.data.Parental.lock() }
+                        }
+                        if (com.irpro.tv.data.Parental.hasCode) ToggleRow("Code demandé pour ouvrir ce profil", p.locked) { v ->
+                            guarded("Pour modifier le profil ${p.name}") { com.irpro.tv.data.Profiles.update(p.copy(locked = v)) }
+                        }
+                        if (p.id != com.irpro.tv.data.Profiles.MAIN) ActionRow("Supprimer le profil ${p.name}") {
+                            guarded("Pour supprimer le profil ${p.name}") { com.irpro.tv.data.Profiles.remove(p.id) }
+                        }
+                    }
+                }
+                8 -> {
+                    parRev.let { }
+                    val P = com.irpro.tv.data.Parental
+                    Text("Masque les catégories pour adultes (XXX, Adultes, +18…) dans le Direct, les Films, les Séries et la Recherche.", color = IrColors.TextDim, fontSize = 14.sp)
+                    if (com.irpro.tv.data.Profiles.current().kids) Text("Tu es sur un profil Enfants : ce contenu y est toujours masqué.", color = IrColors.Cyan, fontSize = 14.sp)
+                    if (!P.hasCode) {
+                        ActionRow("Créer le code parental (4 chiffres)") { askNewCode() }
+                    } else {
+                        ToggleRow("Masquer le contenu adulte", P.enabled) { v -> guarded(if (v) "Pour activer le contrôle parental" else "Pour désactiver le contrôle parental") { P.setEnabled(v); parNote = null } }
+                        if (P.enabled && !com.irpro.tv.data.Profiles.current().kids) {
+                            if (!P.unlocked) ActionRow("Afficher le contenu adulte jusqu'à la fermeture de l'appli") {
+                                guarded("Pour afficher le contenu adulte") { P.unlockSession(); parNote = "Contenu adulte visible jusqu'à la fermeture de l'appli ou un changement de profil." }
+                            } else ActionRow("Masquer à nouveau maintenant") { P.lock(); parNote = null }
+                        }
+                        ActionRow("Changer le code") { guarded("Entre le code actuel") { askNewCode() } }
+                    }
+                    parNote?.let { Text(it, color = IrColors.Cyan, fontSize = 14.sp) }
+                }
                 else -> {
                     InfoLine("Application", "IR PRO TV ${BuildConfig.VERSION_NAME}")
                     InfoLine("Serveur", if (playlist.type == PlaylistType.XTREAM) playlist.server else "Liste M3U")
@@ -304,8 +362,17 @@ fun SettingsScreen(
                 }
             }
         }
+    }    pin?.let { r ->
+        PinDialog(r.title, r.sub, onDismiss = { pin = null }) { c ->
+            val res = r.onCode(c)
+            if (res == null && pin === r) pin = null
+            res
+        }
     }
 }
+
+/** Demande de code parental en cours dans les Paramètres. */
+private class PinReq(val title: String, val sub: String, val onCode: (String) -> String?)
 
 
 @Composable

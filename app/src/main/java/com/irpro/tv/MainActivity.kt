@@ -139,6 +139,8 @@ fun App(startScreen: String = "intro") {
     LaunchedEffect(Unit) { while (true) { delay(30_000); reminders.addAll(Reminders.due()) } }
 
     fun afterIntro() = if (store.hasAny()) "home" else "welcome"
+    /** Après l'intro : « Qui regarde ? » s'il y a plusieurs profils. */
+    fun afterLaunch() = if (store.hasAny() && com.irpro.tv.data.Profiles.all().size > 1) "profiles" else afterIntro()
 
     val onSaved: (Playlist) -> Unit = {
         store.save(it); version++
@@ -147,7 +149,21 @@ fun App(startScreen: String = "intro") {
     }
 
     when (screen) {
-        "intro" -> IntroScreen(channelCount = content.catalog?.channels?.size ?: 0, onFinished = { screen = afterIntro() })
+        "intro" -> IntroScreen(channelCount = content.catalog?.channels?.size ?: 0, onFinished = { screen = afterLaunch() })
+        "profiles" -> com.irpro.tv.ui.ProfilePickerScreen(
+            playlists = remember(version) { store.all() },
+            activePlaylistId = remember(version) { store.active()?.id },
+            onPicked = { p ->
+                com.irpro.tv.data.Profiles.select(p.id)
+                val target = store.all().firstOrNull { it.id == p.playlistId }
+                if (target != null && target.id != store.active()?.id) {
+                    store.setActive(target.id); version++
+                    ContentRepository.load(ctx, target, refresh = false)
+                }
+                screen = afterIntro()
+            },
+            onBack = { screen = afterIntro() },
+        )
         "welcome" -> WelcomeScreen(
             canGoBack = store.hasAny(), onBack = { screen = "playlists" },
             onXtream = { screen = "xtream" }, onM3u = { screen = "m3u" }, onPhone = { screen = "phone" },
@@ -157,7 +173,12 @@ fun App(startScreen: String = "intro") {
         "phone" -> PhoneAddScreen(onBack = { screen = "welcome" }, onSaved = onSaved)
         else -> {
             val active = remember(version) { store.active() }
-            val catalog = content.catalog
+            // Contrôle parental : catégories pour adultes masquées selon le profil et le code
+            val profileId by com.irpro.tv.data.Profiles.active.collectAsState()
+            val profRev by com.irpro.tv.data.Profiles.rev.collectAsState()
+            val parental by com.irpro.tv.data.Parental.state.collectAsState()
+            val rawCatalog = content.catalog
+            val catalog = remember(rawCatalog, profileId, profRev, parental) { rawCatalog?.let { com.irpro.tv.data.Parental.filter(it) } }
             val playlistsScreen: @Composable (Playlist) -> Unit = { a ->
                 PlaylistReadyScreen(
                     playlist = a, count = remember(version) { store.all().size }, state = content,
@@ -198,6 +219,7 @@ fun App(startScreen: String = "intro") {
                         onCheckUpdate = { updateChecked = false; screen = "home" },
                         onBack = { screen = "home" },
                         startSection = if (themeSwitched) 6 else 0,
+                        onProfiles = { screen = "profiles" },
                     )
                     screen == "search" && com.irpro.tv.ui.ThemeState.pro -> com.irpro.tv.ui.ProSearchScreen(
                         catalog,

@@ -40,7 +40,12 @@ object UserData {
         _settings.value = loadSettings()
         FrenchPriority.enabled = _settings.value.frenchFirst
         com.irpro.tv.ui.ThemeState.pro = _settings.value.theme == "pro"
+        Profiles.init(appCtx)
+        Parental.init(appCtx)
     }
+
+    /** Signale que les données affichées ont changé (ex. : changement de profil). */
+    fun bump() { _rev.value++ }
 
     private val prefs get() = appCtx.getSharedPreferences("irpro_user", Context.MODE_PRIVATE)
 
@@ -90,7 +95,8 @@ object UserData {
         _rev.value++
     }
 
-    private fun k(pl: String, what: String) = "$pl:$what"
+    /** Clé des données : propre à la playlist ET au profil en cours. */
+    private fun k(pl: String, what: String) = "${Profiles.keyPrefix(pl)}:$what"
 
     /** Recherches récentes (écran Recherche du Thème 2). */
     fun recentSearches(): List<String> = list("recent_search")
