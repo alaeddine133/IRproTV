@@ -170,6 +170,8 @@ fun App() {
                 LoadingScreen(state = content, onRetry = { ContentRepository.load(ctx, active, refresh = true) }, onPlaylists = { screen = "playlists" })
             } else {
                 val byId = remember(catalog) { catalog.channels.associateBy { it.id } }
+                // Un seul lecteur pour l'aperçu du Direct et le plein écran : pas de coupure, une seule connexion
+                val livePb = if (screen == "live" || screen == "liveplay") com.irpro.tv.player.rememberPlayback() else null
                 fun playChannel(ch: Channel, cat: String, back: String) {
                     nav.liveChannel = ch.id; nav.liveCat = cat; nav.playBack = back; screen = "liveplay"
                 }
@@ -195,6 +197,7 @@ fun App() {
                         active, catalog, nav.liveCat, nav.liveChannel,
                         onPlay = { ch, cat -> playChannel(ch, cat, "live") },
                         onBack = { screen = "home" },
+                        pb = livePb!!,
                     )
                     screen == "liveplay" -> {
                         val ch = byId[nav.liveChannel]
@@ -206,6 +209,7 @@ fun App() {
                                 nav.liveChannel = c.id; nav.liveCat = cat
                                 screen = if (nav.playBack == "home" || nav.playBack == "search") nav.playBack else "live"
                             },
+                            pb = livePb!!,
                         )
                     }
                     screen == "guide" -> GuideScreen(

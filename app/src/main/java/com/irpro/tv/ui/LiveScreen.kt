@@ -75,6 +75,7 @@ fun LiveScreen(
     startChannel: String?,
     onPlay: (Channel, String) -> Unit,
     onBack: () -> Unit,
+    pb: com.irpro.tv.player.Playback = rememberPlayback(),
 ) {
     BackHandler(onBack = onBack)
     val rev by UserData.rev.collectAsState()
@@ -84,7 +85,6 @@ fun LiveScreen(
     var catId by remember { mutableStateOf(startCategory ?: cats.firstOrNull()?.id ?: CAT_FAV) }
     val channels = remember(catId, rev, catalog) { channelsFor(catalog, playlist, catId) }
     var focused by remember { mutableStateOf<Channel?>(channels.firstOrNull { it.id == startChannel } ?: channels.firstOrNull()) }
-    val pb = rememberPlayback()
     var epg by remember { mutableStateOf<List<Program>>(emptyList()) }
     var toast by remember { mutableStateOf<String?>(null) }
 
@@ -92,8 +92,8 @@ fun LiveScreen(
     LaunchedEffect(focused?.id) {
         val ch = focused ?: return@LaunchedEffect
         epg = Epg.cached(ch) ?: emptyList()
-        delay(700)
-        pb.play(ch.url)
+        delay(if (ch.id == startChannel) 0 else 700)
+        pb.playIfNew(ch.url)
         epg = Epg.forChannel(playlist, ch)
     }
     LaunchedEffect(toast) { if (toast != null) { delay(2200); toast = null } }

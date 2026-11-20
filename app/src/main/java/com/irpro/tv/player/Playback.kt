@@ -67,6 +67,9 @@ class Playback(private val ctx: Context) {
         engine.play(u, startMs)
     }
 
+    /** Lance l'adresse seulement si ce n'est pas déjà elle qui joue (pas de coupure ni de 2e connexion). */
+    fun playIfNew(u: String) { if (u != url || error != null) play(u) }
+
     fun release() { engine.listener = null; engine.release() }
 }
 

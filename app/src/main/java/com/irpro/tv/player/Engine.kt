@@ -192,6 +192,11 @@ class VlcEngine(ctx: Context, private val s: Settings) : Engine {
     private var attached = false
 
     init {
+        // La vidéo peut passer d'un écran à l'autre (aperçu -> plein écran) : on raccroche l'affichage
+        frame.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+            override fun onViewAttachedToWindow(v: View) { if (!attached) { runCatching { mp.attachViews(layout, null, true, false) }; attached = true } }
+            override fun onViewDetachedFromWindow(v: View) { if (attached) { runCatching { mp.detachViews() }; attached = false } }
+        })
         mp.setEventListener { e ->
             when (e.type) {
                 MediaPlayer.Event.Buffering -> listener?.onBuffering(e.buffering < 100f)

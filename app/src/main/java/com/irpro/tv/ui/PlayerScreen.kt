@@ -76,6 +76,7 @@ fun LivePlayerScreen(
     categoryId: String,
     onGuide: (Channel, String) -> Unit,
     onExit: (Channel, String) -> Unit,
+    pb: com.irpro.tv.player.Playback = rememberPlayback(),
 ) {
     var catId by remember { mutableStateOf(categoryId) }
     var list by remember { mutableStateOf(channelsFor(catalog, playlist, catId).ifEmpty { listOf(startChannel) }) }
@@ -86,12 +87,11 @@ fun LivePlayerScreen(
     var epg by remember { mutableStateOf<List<Program>>(emptyList()) }
     var toast by remember { mutableStateOf<String?>(null) }
     var clock by remember { mutableStateOf(hhmm(System.currentTimeMillis())) }
-    val pb = rememberPlayback()
     val focus = remember { FocusRequester() }
 
     LaunchedEffect(current.id) {
         UserData.addRecent(playlist.id, current.id)
-        pb.play(current.url)
+        pb.playIfNew(current.url)
         epg = Epg.cached(current) ?: emptyList()
         epg = Epg.forChannel(playlist, current)
     }
