@@ -78,15 +78,8 @@ fun canPlay4k(ctx: Context): Boolean = try {
 fun IntroScreen(channelCount: Int = 0, onFinished: () -> Unit) {
     val context = LocalContext.current
     val full = remember { !IntroPrefs.fullSeen(context) }
-    val rawId = remember {
-        val k4 = canPlay4k(context)
-        when {
-            full && k4 -> R.raw.intro_full_4k
-            full -> R.raw.intro_full_1080
-            k4 -> R.raw.intro_short_4k
-            else -> R.raw.intro_short_1080
-        }
-    }
+    // Intro « glitch néon » choisie : même vidéo à chaque lancement
+    val rawId = R.raw.intro_full_1080
 
     val done = remember { booleanArrayOf(false) }
     val finish: () -> Unit = {
@@ -155,7 +148,7 @@ fun IntroScreen(channelCount: Int = 0, onFinished: () -> Unit) {
             }
         )
         // Compteur réel de chaînes (intro complète), aux mêmes place et moment que dans la vidéo
-        if (full && channelCount > 0) CounterOverlay(player, channelCount)
+        // Pas de compteur de chaînes sur l'intro glitch néon
     }
 }
 
