@@ -98,6 +98,78 @@ object Updater {
         }
     }
 
+    /** Message à afficher après une installation refusée par Android (null = rien à signaler). */
+    val status = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+
+    /**
+     * Télécharge la mise à jour DIRECTEMENT dans l'installateur d'Android (pas de copie en plus :
+     * deux fois moins de place nécessaire), puis demande la confirmation. Si Android refuse,
+     * la vraie raison arrive dans [status] (place insuffisante, conflit…).
+     */
+    suspend fun downloadAndInstall(ctx: Context, info: UpdateInfo, progress: (Float) -> Unit) = withContext(Dispatchers.IO) {
+        status.value = null
+        val pi = ctx.packageManager.packageInstaller
+        // Sessions d'installation abandonnées (essais précédents) : on libère leur place
+        pi.mySessions.forEach { runCatching { pi.abandonSession(it.sessionId) } }
+        // Anciens fichiers téléchargés : supprimés aussi
+        runCatching { File(ctx.cacheDir, "update").listFiles()?.forEach { it.delete() } }
+        runCatching { ctx.getExternalFilesDir(null)?.let { File(it, "update").listFiles()?.forEach { f -> f.delete() } } }
+
+        val params = android.content.pm.PackageInstaller.SessionParams(android.content.pm.PackageInstaller.SessionParams.MODE_FULL_INSTALL)
+        params.setAppPackageName(ctx.packageName)
+        if (info.size > 0) params.setSize(info.size)
+        val id = pi.createSession(params)
+        val session = pi.openSession(id)
+        try {
+            fun open(u: String) = (URL(u).openConnection() as HttpURLConnection).apply {
+                instanceFollowRedirects = false; connectTimeout = 15_000; readTimeout = 30_000
+                setRequestProperty("User-Agent", "IRPROTV")
+            }
+            var conn = open(info.apkUrl)
+            var hops = 0
+            while (conn.responseCode in 300..399 && hops++ < 6) {
+                val loc = conn.getHeaderField("Location"); conn.disconnect(); conn = open(loc)
+            }
+            val total = if (conn.contentLengthLong > 0) conn.contentLengthLong else info.size
+            var done = 0L
+            conn.inputStream.use { input ->
+                session.openWrite("base.apk", 0, if (total > 0) total else -1).use { out ->
+                    val buf = ByteArray(64 * 1024)
+                    while (true) {
+                        val n = input.read(buf); if (n < 0) break
+                        out.write(buf, 0, n); done += n
+                        if (total > 0) progress(done.toFloat() / total)
+                    }
+                    session.fsync(out)
+                }
+            }
+            conn.disconnect()
+            if (info.size > 0 && done != info.size) error("téléchargement incomplet")
+            val flags = if (Build.VERSION.SDK_INT >= 31) android.app.PendingIntent.FLAG_MUTABLE else 0
+            val intent = Intent(ctx, UpdateReceiver::class.java)
+            val sender = android.app.PendingIntent.getBroadcast(ctx, id, intent, flags or android.app.PendingIntent.FLAG_UPDATE_CURRENT)
+            session.commit(sender.intentSender)
+            session.close()
+        } catch (e: Throwable) {
+            runCatching { session.abandon() }
+            throw e
+        }
+    }
+
+    /** Traduit la réponse d'Android en phrase claire. */
+    fun explain(code: Int, raw: String?): String? = when (code) {
+        android.content.pm.PackageInstaller.STATUS_SUCCESS -> null
+        android.content.pm.PackageInstaller.STATUS_FAILURE_STORAGE ->
+            "Pas assez de place sur la box. Libère de l'espace (désinstalle une appli inutile ou vide le cache des applis) puis réessaie."
+        android.content.pm.PackageInstaller.STATUS_FAILURE_CONFLICT ->
+            "Une autre version d'IR PRO TV bloque l'installation (signature différente). Désinstalle-la une fois, puis réinstalle avec Downloader."
+        android.content.pm.PackageInstaller.STATUS_FAILURE_INCOMPATIBLE -> "Cette version n'est pas compatible avec cette box."
+        android.content.pm.PackageInstaller.STATUS_FAILURE_ABORTED -> "Installation annulée."
+        android.content.pm.PackageInstaller.STATUS_FAILURE_BLOCKED -> "Installation bloquée par la box (autorisation « sources inconnues » ?)."
+        android.content.pm.PackageInstaller.STATUS_FAILURE_INVALID -> "Fichier abîmé pendant le téléchargement. Réessaie."
+        else -> "Installation refusée par Android" + (raw?.takeIf { it.isNotBlank() }?.let { " : $it" } ?: ".")
+    }
+
     /** Lance l'installateur Android (l'utilisateur appuie sur « Installer »). */
     fun install(ctx: Context, apk: File): Boolean = runCatching {
         val uri = if (Build.VERSION.SDK_INT < 24) Uri.fromFile(apk) else FileProvider.getUriForFile(ctx, "${ctx.packageName}.files", apk)

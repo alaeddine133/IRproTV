@@ -61,7 +61,7 @@ android {
         }
     }
     packaging {
-        jniLibs { useLegacyPackaging = true }
+        jniLibs { useLegacyPackaging = false }   // bibliothèques non recopiées à l'installation : prend beaucoup moins de place
     }
     lint {
         abortOnError = false

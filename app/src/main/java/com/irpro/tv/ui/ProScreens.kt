@@ -834,7 +834,9 @@ fun ProUpdateDialog(info: UpdateInfo, onLater: () -> Unit) {
                     ProgressLine(p, Modifier.fillMaxWidth(), 7.dp)
                 }
             }
-            msg?.let { Text(it, color = P.CyanText, fontSize = 12.sp, textAlign = TextAlign.Center) }
+            val failure by Updater.status.collectAsState()
+            failure?.let { Text(it, color = Color(0xFFFF8A8A), fontSize = 12.sp, textAlign = TextAlign.Center) }
+            if (failure == null) msg?.let { Text(it, color = P.CyanText, fontSize = 12.sp, textAlign = TextAlign.Center) }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(top = 6.dp)) {
                 ProButton(if (progress == null) "Installer maintenant" else "Téléchargement…", Modifier.focusRequester(f), primary = true, fontSize = 14.sp, gap = P.Dialog) {
                     if (progress != null) return@ProButton
@@ -845,9 +847,14 @@ fun ProUpdateDialog(info: UpdateInfo, onLater: () -> Unit) {
                     }
                     scope.launch {
                         progress = 0f
-                        runCatching { Updater.download(ctx, info) { p -> progress = p } }
-                            .onSuccess { progress = null; msg = if (Updater.install(ctx, it)) "Appuie sur « Installer » dans la fenêtre d'Android." else "Impossible d'ouvrir l'installateur d'Android sur cette box." }
-                            .onFailure { progress = null; msg = "Téléchargement impossible. Réessaie plus tard." }
+                        runCatching { Updater.downloadAndInstall(ctx, info) { p -> progress = p } }
+                            .onSuccess { progress = null; msg = "Appuie sur « Installer » dans la fenêtre d'Android." }
+                            .onFailure {
+                                // Ancienne méthode en secours (fichier téléchargé puis installateur classique)
+                                runCatching { Updater.download(ctx, info) { p -> progress = p } }
+                                    .onSuccess { f -> progress = null; msg = if (Updater.install(ctx, f)) "Appuie sur « Installer » dans la fenêtre d'Android." else "Impossible d'ouvrir l'installateur d'Android sur cette box." }
+                                    .onFailure { progress = null; msg = "Téléchargement impossible. Vérifie la connexion et réessaie." }
+                            }
                     }
                 }
                 ProButton("Plus tard", fontSize = 13.sp, gap = P.Dialog, onClick = onLater)
