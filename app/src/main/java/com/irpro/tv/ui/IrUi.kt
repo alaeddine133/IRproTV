@@ -43,17 +43,17 @@ object ThemeState {
 
 /** Couleurs d'IR PRO TV, selon le thème actif. */
 object IrColors {
-    private val pro get() = ThemeState.pro
-    val Night get() = if (pro) Color(0xFF07060D) else Color(0xFF0A1430)
-    val Black get() = if (pro) Color(0xFF07060D) else Color(0xFF060607)
-    val Card get() = if (pro) Color(0xFF14121F) else Color(0xFF12204A)
-    val Panel get() = if (pro) Color(0xFF0D0B16) else IrColors.Panel
-    val Violet get() = if (pro) Color(0xFF8B5CF6) else Color(0xFF7C3AED)
+    private val pro: Boolean get() = ThemeState.pro
+    val Night: Color get() = if (pro) Color(0xFF07060D) else Color(0xFF0A1430)
+    val Black: Color get() = if (pro) Color(0xFF07060D) else Color(0xFF060607)
+    val Card: Color get() = if (pro) Color(0xFF14121F) else Color(0xFF12204A)
+    val Panel: Color get() = if (pro) Color(0xFF0D0B16) else Color(0xFF061026)
+    val Violet: Color get() = if (pro) Color(0xFF8B5CF6) else Color(0xFF7C3AED)
     val VioletLight = Color(0xFFA78BFA)
     val Cyan = Color(0xFF22D3EE)
     val CyanDark = Color(0xFF04342C)
-    val TextDim get() = if (pro) Color(0xFFB4B0C8) else Color(0xFF9AA3B5)
-    val Text get() = if (pro) Color(0xFFF5F3FF) else Color.White
+    val TextDim: Color get() = if (pro) Color(0xFFB4B0C8) else Color(0xFF9AA3B5)
+    val Text: Color get() = if (pro) Color(0xFFF5F3FF) else Color.White
     val Danger = Color(0xFFFF8A8A)
     val Success = Color(0xFF5EEAD4)
 }
