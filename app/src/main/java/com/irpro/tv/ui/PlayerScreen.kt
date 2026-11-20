@@ -77,6 +77,8 @@ fun LivePlayerScreen(
     onGuide: (Channel, String) -> Unit,
     onExit: (Channel, String) -> Unit,
     pb: com.irpro.tv.player.Playback = rememberPlayback(),
+    /** OK : retour au menu Direct (catégories / bouquets), la chaîne continue dans l'aperçu. */
+    onMenu: (Channel, String) -> Unit = onExit,
 ) {
     var catId by remember { mutableStateOf(categoryId) }
     var list by remember { mutableStateOf(channelsFor(catalog, playlist, catId).ifEmpty { listOf(startChannel) }) }
@@ -135,10 +137,10 @@ fun LivePlayerScreen(
                         val f = UserData.toggleFavorite(playlist.id, current.id)
                         toast = if (f) "♥ Ajoutée aux favoris" else "Retirée des favoris"; true
                     }
-                    else -> if (isCenter(e.key)) { if (pb.error != null && true) pb.play(current.url) else quick = true; true } else false
+                    else -> if (isCenter(e.key)) { if (pb.error != null) pb.play(current.url) else onMenu(current, catId); true } else false
                 }
             }
-            .clickable { if (!quick) quick = true }
+            .clickable { if (!quick) onMenu(current, catId) }
     ) {
         VideoSurface(pb, Modifier.fillMaxSize())
 
@@ -206,7 +208,7 @@ private fun LiveBanner(ch: Channel, epg: List<Program>, fav: Boolean, modifier: 
         Spacer(Modifier.width(16.dp))
         Column(horizontalAlignment = Alignment.End) {
             Text("▲▼ zapper", color = IrColors.TextDim, fontSize = 12.sp)
-            Text("OK liste", color = IrColors.TextDim, fontSize = 12.sp)
+            Text("OK menu", color = IrColors.TextDim, fontSize = 12.sp)
             Text("◀ guide", color = IrColors.TextDim, fontSize = 12.sp)
             Text("Menu ♥", color = IrColors.TextDim, fontSize = 12.sp)
         }

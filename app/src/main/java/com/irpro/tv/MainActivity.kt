@@ -251,6 +251,7 @@ fun App(startScreen: String = "intro") {
                                 screen = if (nav.playBack == "home" || nav.playBack == "search" || nav.playBack == "mylist") nav.playBack else "live"
                             },
                             pb = livePb!!,
+                            onMenu = { c, cat -> nav.liveChannel = c.id; nav.liveCat = cat; screen = "live" },
                         )
                     }
                     screen == "guide" -> GuideScreen(
