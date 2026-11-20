@@ -332,7 +332,9 @@ fun PlaylistReadyScreen(
     onRefresh: () -> Unit,
     onAdd: () -> Unit,
     onDelete: () -> Unit,
+    onBack: () -> Unit,
 ) {
+    BackHandler(onBack = onBack)
     val first = remember { FocusRequester() }
     LaunchedEffect(playlist.id) { first.requestFocus() }
     var confirmDelete by remember { mutableStateOf(false) }
@@ -386,7 +388,7 @@ fun PlaylistReadyScreen(
                 )
             }
             Spacer(Modifier.height(18.dp))
-            Text("Prochaine étape : l'accueil console", color = Color(0xFFC9C9D1), fontSize = 13.sp)
+            Text("Paramètres · Mes playlists", color = Color(0xFFC9C9D1), fontSize = 13.sp)
             Text("Version ${BuildConfig.VERSION_NAME}", color = IrColors.TextDim, fontSize = 12.sp)
         }
     }

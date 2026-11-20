@@ -15,7 +15,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import com.irpro.tv.data.ContentRepository
 import com.irpro.tv.data.PlaylistStore
+import com.irpro.tv.ui.ComingSoonScreen
+import com.irpro.tv.ui.HomeScreen
 import com.irpro.tv.ui.LoadingScreen
+import com.irpro.tv.ui.Section
+import com.irpro.tv.ui.SectionPreviewScreen
 import com.irpro.tv.ui.M3uScreen
 import com.irpro.tv.ui.PlaylistReadyScreen
 import com.irpro.tv.ui.WelcomeScreen
@@ -49,7 +53,7 @@ fun App() {
 
         "welcome" -> WelcomeScreen(
             canGoBack = store.hasAny(),
-            onBack = { screen = "ready" },
+            onBack = { screen = "playlists" },
             onXtream = { screen = "xtream" },
             onM3u = { screen = "m3u" },
         )
@@ -78,8 +82,8 @@ fun App() {
                     onRetry = { ContentRepository.load(ctx, active, refresh = true) },
                     onPlaylists = { screen = "welcome" },
                 )
-            } else {
-                PlaylistReadyScreen(
+            } else when (screen) {
+                "playlists" -> PlaylistReadyScreen(
                     playlist = active,
                     count = remember(version) { store.all().size },
                     state = content,
@@ -91,7 +95,28 @@ fun App() {
                         store.active()?.let { ContentRepository.load(ctx, it, refresh = true) }
                         screen = afterIntro()
                     },
+                    onBack = { screen = "ready" },
                 )
+                "search" -> ComingSoonScreen(
+                    "Recherche", "La recherche dans toutes tes chaînes, films et séries arrive à l'étape 13.",
+                    onBack = { screen = "ready" },
+                )
+                else -> if (screen.startsWith("section:")) {
+                    SectionPreviewScreen(
+                        section = Section.valueOf(screen.removePrefix("section:")),
+                        catalog = content.catalog!!,
+                        onBack = { screen = "ready" },
+                    )
+                } else {
+                    HomeScreen(
+                        playlist = active,
+                        catalog = content.catalog!!,
+                        updating = content.loading,
+                        onOpen = { screen = "section:" + it.name },
+                        onSearch = { screen = "search" },
+                        onSettings = { screen = "playlists" },
+                    )
+                }
             }
         }
     }
