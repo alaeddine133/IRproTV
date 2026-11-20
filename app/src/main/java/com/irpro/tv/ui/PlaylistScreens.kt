@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.sp
 import com.irpro.tv.BuildConfig
 import com.irpro.tv.R
 import com.irpro.tv.data.CheckResult
+import com.irpro.tv.data.LoadState
 import com.irpro.tv.data.Playlist
 import com.irpro.tv.data.PlaylistCheck
 import com.irpro.tv.data.PlaylistRules
@@ -270,42 +271,137 @@ fun M3uScreen(onBack: () -> Unit, onSaved: (Playlist) -> Unit) {
     }
 }
 
-/* ---------------- Playlist prête (en attendant l'étape 4) ---------------- */
+/* ---------------- Chargement + playlist prête (en attendant l'accueil de l'étape 5) ---------------- */
+
+@Composable
+private fun CountLine(label: String, count: Int?, active: Boolean) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
+        val mark = when {
+            count != null -> "✓"
+            active -> "…"
+            else -> "·"
+        }
+        Text(mark, color = if (count != null) IrColors.Success else IrColors.Cyan, fontSize = 18.sp, modifier = Modifier.width(28.dp))
+        Text(label, color = Color.White, fontSize = 17.sp, modifier = Modifier.width(190.dp))
+        Text(count?.let { formatCount(it) } ?: "", color = IrColors.Cyan, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+fun formatCount(n: Int): String = String.format(java.util.Locale.FRANCE, "%,d", n).replace(' ', ' ').replace(' ', ' ')
+
+@Composable
+fun LoadingScreen(state: LoadState, onRetry: () -> Unit, onPlaylists: () -> Unit) {
+    val retry = remember { FocusRequester() }
+    ScreenFrame {
+        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+            Image(painterResource(R.drawable.logo), null, Modifier.size(96.dp))
+            Spacer(Modifier.height(18.dp))
+            Text(
+                if (state.error == null) "Chargement de ta playlist" else "Chargement impossible",
+                color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Bold,
+            )
+            Spacer(Modifier.height(6.dp))
+            if (state.error == null) Row(verticalAlignment = Alignment.CenterVertically) {
+                CircularProgressIndicator(color = IrColors.Cyan, strokeWidth = 3.dp, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(10.dp))
+                Text(state.step, color = IrColors.Cyan, fontSize = 15.sp)
+            } else Text(state.error, color = IrColors.Danger, fontSize = 16.sp)
+            Spacer(Modifier.height(20.dp))
+            Column {
+                CountLine("Chaînes en direct", state.liveCount, state.loading)
+                CountLine("Films", state.movieCount, state.loading && state.liveCount != null)
+                CountLine("Séries", state.seriesCount, state.loading && state.movieCount != null)
+            }
+            if (state.error != null) {
+                LaunchedEffect(Unit) { retry.requestFocus() }
+                Spacer(Modifier.height(22.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    IrButton("Réessayer", modifier = Modifier.focusRequester(retry), onClick = onRetry)
+                    IrButton("Mes playlists", primary = false, onClick = onPlaylists)
+                }
+            }
+        }
+    }
+}
 
 @Composable
 fun PlaylistReadyScreen(
     playlist: Playlist,
     count: Int,
+    state: LoadState,
+    onRefresh: () -> Unit,
     onAdd: () -> Unit,
     onDelete: () -> Unit,
 ) {
     val first = remember { FocusRequester() }
     LaunchedEffect(playlist.id) { first.requestFocus() }
     var confirmDelete by remember { mutableStateOf(false) }
+    val c = state.catalog
 
     ScreenFrame {
         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-            Image(painterResource(R.drawable.logo), null, Modifier.size(110.dp))
-            Spacer(Modifier.height(16.dp))
-            Text("✓  Playlist prête", color = IrColors.Success, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.height(6.dp))
-            Text(playlist.name, color = Color.White, fontSize = 32.sp, fontWeight = FontWeight.Bold)
+            Image(painterResource(R.drawable.logo), null, Modifier.size(84.dp))
+            Spacer(Modifier.height(10.dp))
+            Text(playlist.name, color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Bold)
             val kind = if (playlist.type == PlaylistType.XTREAM) "Xtream" else "M3U"
             val exp = playlist.expiresAt?.let { " · expire le ${PlaylistRules.formatDate(it)}" } ?: ""
-            Text("$kind$exp", color = IrColors.TextDim, fontSize = 16.sp)
-            if (count > 1) Text("$count playlists enregistrées", color = IrColors.TextDim, fontSize = 14.sp)
-            Spacer(Modifier.height(24.dp))
+            val many = if (count > 1) " · $count playlists enregistrées" else ""
+            Text("$kind$exp$many", color = IrColors.TextDim, fontSize = 15.sp)
+            Spacer(Modifier.height(18.dp))
+            if (c != null) {
+                Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    StatBox("Chaînes", c.channels.size)
+                    StatBox("Films", c.movies.size)
+                    StatBox("Séries", c.series.size)
+                }
+                Spacer(Modifier.height(14.dp))
+                val fr = c.liveCategories.filter { it.isFrench }
+                Text(
+                    if (fr.isNotEmpty()) "En premier (français) : " + fr.take(5).joinToString(" · ") { it.name } +
+                        (if (fr.size > 5) " · +${fr.size - 5}" else "")
+                    else "Aucune catégorie française repérée dans cette playlist.",
+                    color = Color(0xFFD5DBEA), fontSize = 14.sp,
+                )
+                Spacer(Modifier.height(4.dp))
+                val upd = java.text.SimpleDateFormat("dd/MM 'à' HH:mm", java.util.Locale.FRANCE).format(java.util.Date(c.updatedAt))
+                Text("Dernière mise à jour : $upd", color = IrColors.TextDim, fontSize = 13.sp)
+            }
+            if (state.loading) {
+                Spacer(Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(color = IrColors.Cyan, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Mise à jour en cours · ${state.step}", color = IrColors.Cyan, fontSize = 13.sp)
+                }
+            }
+            state.error?.let { Spacer(Modifier.height(6.dp)); Text(it, color = IrColors.Danger, fontSize = 14.sp) }
+            Spacer(Modifier.height(20.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                IrButton("Ajouter une playlist", modifier = Modifier.focusRequester(first), onClick = onAdd)
+                IrButton("Mettre à jour maintenant", modifier = Modifier.focusRequester(first), enabled = !state.loading, onClick = onRefresh)
+                IrButton("Ajouter une playlist", primary = false, onClick = onAdd)
                 IrButton(
-                    if (confirmDelete) "Confirmer la suppression" else "Supprimer cette playlist",
+                    if (confirmDelete) "Confirmer la suppression" else "Supprimer",
                     primary = false,
                     onClick = { if (confirmDelete) { confirmDelete = false; onDelete() } else confirmDelete = true },
                 )
             }
-            Spacer(Modifier.height(28.dp))
-            Text("Prochaine étape : chargement des chaînes, films et séries", color = Color(0xFFC9C9D1), fontSize = 14.sp)
+            Spacer(Modifier.height(18.dp))
+            Text("Prochaine étape : l'accueil console", color = Color(0xFFC9C9D1), fontSize = 13.sp)
             Text("Version ${BuildConfig.VERSION_NAME}", color = IrColors.TextDim, fontSize = 12.sp)
         }
+    }
+}
+
+@Composable
+private fun StatBox(label: String, n: Int) {
+    Column(
+        Modifier
+            .background(IrColors.Card, RoundedCornerShape(14.dp))
+            .border(1.dp, Color(0x3322D3EE), RoundedCornerShape(14.dp))
+            .padding(horizontal = 26.dp, vertical = 12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(formatCount(n), color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Bold)
+        Text(label, color = IrColors.Cyan, fontSize = 14.sp)
     }
 }
