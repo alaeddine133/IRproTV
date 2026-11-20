@@ -36,21 +36,47 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-/** Couleurs validées pour IR PRO TV */
+/** Thème actif : Thème 1 · Classique (false) ou Thème 2 · Pro (true). Changé dans Paramètres > Thème. */
+object ThemeState {
+    @Volatile var pro: Boolean = false
+}
+
+/** Couleurs d'IR PRO TV, selon le thème actif. */
 object IrColors {
-    val Night = Color(0xFF0A1430)
-    val Black = Color(0xFF060607)
-    val Card = Color(0xFF12204A)
-    val Violet = Color(0xFF7C3AED)
+    private val pro get() = ThemeState.pro
+    val Night get() = if (pro) Color(0xFF07060D) else Color(0xFF0A1430)
+    val Black get() = if (pro) Color(0xFF07060D) else Color(0xFF060607)
+    val Card get() = if (pro) Color(0xFF14121F) else Color(0xFF12204A)
+    val Panel get() = if (pro) Color(0xFF0D0B16) else IrColors.Panel
+    val Violet get() = if (pro) Color(0xFF8B5CF6) else Color(0xFF7C3AED)
     val VioletLight = Color(0xFFA78BFA)
     val Cyan = Color(0xFF22D3EE)
     val CyanDark = Color(0xFF04342C)
-    val TextDim = Color(0xFF9AA3B5)
+    val TextDim get() = if (pro) Color(0xFFB4B0C8) else Color(0xFF9AA3B5)
+    val Text get() = if (pro) Color(0xFFF5F3FF) else Color.White
     val Danger = Color(0xFFFF8A8A)
     val Success = Color(0xFF5EEAD4)
 }
 
-val IrBackground = Brush.verticalGradient(listOf(Color(0xFF0C1838), IrColors.Night, Color(0xFF070E24)))
+val IrBackground: Brush
+    get() = if (ThemeState.pro) Brush.radialGradient(listOf(Color(0x338B5CF6), Color(0xFF07060D)), center = androidx.compose.ui.geometry.Offset.Zero, radius = 1600f)
+    else Brush.verticalGradient(listOf(Color(0xFF0C1838), Color(0xFF0A1430), Color(0xFF070E24)))
+
+/** Polices : Inter (texte) et Poppins (titres) pour le Thème 2 ; police système pour le Thème 1. */
+object IrFonts {
+    private val inter = androidx.compose.ui.text.font.FontFamily(
+        androidx.compose.ui.text.font.Font(com.irpro.tv.R.font.inter_regular, FontWeight.Normal),
+        androidx.compose.ui.text.font.Font(com.irpro.tv.R.font.inter_medium, FontWeight.Medium),
+        androidx.compose.ui.text.font.Font(com.irpro.tv.R.font.inter_semibold, FontWeight.SemiBold),
+        androidx.compose.ui.text.font.Font(com.irpro.tv.R.font.inter_bold, FontWeight.Bold),
+    )
+    private val poppins = androidx.compose.ui.text.font.FontFamily(
+        androidx.compose.ui.text.font.Font(com.irpro.tv.R.font.poppins_bold, FontWeight.Bold),
+        androidx.compose.ui.text.font.Font(com.irpro.tv.R.font.poppins_bold, FontWeight.SemiBold),
+    )
+    val body get() = if (ThemeState.pro) inter else androidx.compose.ui.text.font.FontFamily.Default
+    val title get() = if (ThemeState.pro) poppins else androidx.compose.ui.text.font.FontFamily.Default
+}
 
 /** Grande tuile façon console : violette + contour cyan + légère mise en avant quand elle est sélectionnée. */
 @Composable
@@ -88,7 +114,9 @@ fun IrButton(
     val shape = RoundedCornerShape(50)
     val bg = when {
         !enabled -> Color(0x33FFFFFF)
+        ThemeState.pro && primary -> Color.White
         primary -> if (focused) Color.White else IrColors.Cyan
+        ThemeState.pro -> if (focused) Color(0x338B5CF6) else Color(0x14FFFFFF)
         else -> if (focused) IrColors.Violet else Color.Transparent
     }
     val fg = if (primary && enabled) IrColors.Night else Color.White
@@ -107,7 +135,7 @@ fun IrButton(
             .padding(horizontal = 28.dp, vertical = 12.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(text, color = fg, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+        Text(text, color = if (ThemeState.pro && primary && enabled) Color(0xFF0B0918) else fg, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, fontFamily = IrFonts.title)
     }
 }
 

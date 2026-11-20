@@ -119,7 +119,7 @@ fun LiveScreen(
             // 1) Catégories
             LazyColumn(
                 state = catState,
-                modifier = Modifier.width(250.dp).fillMaxHeight().background(Color(0xFF061026)).padding(vertical = 14.dp),
+                modifier = Modifier.width(250.dp).fillMaxHeight().background(IrColors.Panel).padding(vertical = 14.dp),
             ) {
                 item {
                     Text("Direct", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 18.dp, bottom = 10.dp))

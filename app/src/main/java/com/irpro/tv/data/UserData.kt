@@ -21,6 +21,7 @@ data class Settings(
     val epgUrl: String = "",
     val epgOffsetHours: Int = 0,
     val audioDelayMs: Int = 0,
+    val theme: String = "classic",      // "classic" = Thème 1, "pro" = Thème 2
 )
 
 /** Données de l'utilisateur, par playlist : favoris, chaînes récentes, reprise des films/épisodes, épisodes vus. */
@@ -38,6 +39,7 @@ object UserData {
         appCtx = ctx.applicationContext
         _settings.value = loadSettings()
         FrenchPriority.enabled = _settings.value.frenchFirst
+        com.irpro.tv.ui.ThemeState.pro = _settings.value.theme == "pro"
     }
 
     private val prefs get() = appCtx.getSharedPreferences("irpro_user", Context.MODE_PRIVATE)
@@ -59,6 +61,7 @@ object UserData {
             epgUrl = o.optString("epgUrl", d.epgUrl),
             epgOffsetHours = o.optInt("epgOffsetHours", d.epgOffsetHours),
             audioDelayMs = o.optInt("audioDelayMs", d.audioDelayMs),
+            theme = o.optString("theme", d.theme),
         )
     }
 
@@ -66,12 +69,13 @@ object UserData {
         val s = f(_settings.value)
         _settings.value = s
         FrenchPriority.enabled = s.frenchFirst
+        com.irpro.tv.ui.ThemeState.pro = s.theme == "pro"
         val o = JSONObject().apply {
             put("engine", s.engine); put("buffer", s.buffer); put("audioLang", s.audioLang)
             put("subtitlesDefault", s.subtitlesDefault); put("subtitleSize", s.subtitleSize)
             put("autoNextEpisode", s.autoNextEpisode); put("frenchFirst", s.frenchFirst)
             put("navSounds", s.navSounds); put("refreshOnLaunch", s.refreshOnLaunch)
-            put("epgUrl", s.epgUrl); put("epgOffsetHours", s.epgOffsetHours); put("audioDelayMs", s.audioDelayMs)
+            put("epgUrl", s.epgUrl); put("epgOffsetHours", s.epgOffsetHours); put("audioDelayMs", s.audioDelayMs); put("theme", s.theme)
         }
         prefs.edit().putString("settings", o.toString()).apply()
     }

@@ -213,23 +213,24 @@ fun SettingsScreen(
     onRefresh: () -> Unit,
     onCheckUpdate: () -> Unit,
     onBack: () -> Unit,
+    startSection: Int = 0,
 ) {
     BackHandler(onBack = onBack)
     val ctx = LocalContext.current
     var note by remember { mutableStateOf<String?>(null) }
     val s by UserData.settings.collectAsState()
-    val sections = listOf("Playlists", "Mises à jour", "Langue et priorité", "Lecteur", "Guide TV", "Apparence et sons", "À propos")
-    var sec by remember { mutableIntStateOf(0) }
+    val sections = listOf("Playlists", "Mises à jour", "Langue et priorité", "Lecteur", "Guide TV", "Apparence et sons", "Thème", "À propos")
+    var sec by remember { mutableIntStateOf(startSection) }
     val first = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
 
     Row(Modifier.fillMaxSize().background(IrColors.Night)) {
-        Column(Modifier.width(280.dp).fillMaxHeight().background(Color(0xFF061026)).padding(vertical = 20.dp)) {
+        Column(Modifier.width(280.dp).fillMaxHeight().background(IrColors.Panel).padding(vertical = 20.dp)) {
             Text("Paramètres", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 22.dp, bottom = 14.dp))
             sections.forEachIndexed { i, label ->
                 var f by remember { mutableStateOf(false) }
                 Text(label, color = Color.White, fontSize = 15.sp,
-                    modifier = (if (i == 0) Modifier.focusRequester(first) else Modifier).fillMaxWidth()
+                    modifier = (if (i == startSection) Modifier.focusRequester(first) else Modifier).fillMaxWidth()
                         .background(if (i == sec) IrColors.Violet else if (f) Color(0x332E66A8) else Color.Transparent)
                         .then(if (f) Modifier.border(2.dp, IrColors.Cyan) else Modifier)
                         .onFocusChanged { f = it.isFocused; if (it.isFocused) sec = i }
@@ -281,6 +282,20 @@ fun SettingsScreen(
                     ActionRow("Revoir l'intro complète au prochain lancement") { com.irpro.tv.IntroPrefs.reset(ctx); note = "C'est noté : intro complète au prochain lancement." }
                     note?.let { Text(it, color = IrColors.Cyan, fontSize = 14.sp) }
                 }
+                6 -> {
+                    Text("Choisis l'apparence d'IR PRO TV. Le changement s'applique tout de suite.", color = IrColors.TextDim, fontSize = 15.sp)
+                    Spacer(Modifier.height(6.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(22.dp)) {
+                        ThemeCard("Thème 1 · Classique", "Le design d'origine de l'appli", pro = false, selected = s.theme != "pro") {
+                            if (s.theme == "pro") { com.irpro.tv.themeSwitched = true; UserData.updateSettings { it.copy(theme = "classic") } }
+                        }
+                        ThemeCard("Thème 2 · Pro", "Grandes images, fiches détaillées", pro = true, selected = s.theme == "pro") {
+                            if (s.theme != "pro") { com.irpro.tv.themeSwitched = true; UserData.updateSettings { it.copy(theme = "pro") } }
+                        }
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    Text("Tes playlists, ta liste et tes réglages restent les mêmes quel que soit le thème.", color = IrColors.TextDim, fontSize = 14.sp)
+                }
                 else -> {
                     InfoLine("Application", "IR PRO TV ${BuildConfig.VERSION_NAME}")
                     InfoLine("Serveur", if (playlist.type == PlaylistType.XTREAM) playlist.server else "Liste M3U")
@@ -321,6 +336,48 @@ private fun ToggleRow(label: String, value: Boolean, onChange: (Boolean) -> Unit
     Row(rowMod(f).onFocusChanged { f = it.isFocused }.clickable { onChange(!value) }.padding(horizontal = 16.dp, vertical = 13.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(label, color = Color.White, fontSize = 15.sp, modifier = Modifier.weight(1f))
         Text(if (value) "Activé" else "Désactivé", color = if (value) IrColors.Cyan else IrColors.TextDim, fontSize = 15.sp)
+    }
+}
+
+/** Carte de choix du thème, avec un petit aperçu. */
+@Composable
+private fun ThemeCard(title: String, sub: String, pro: Boolean, selected: Boolean, onClick: () -> Unit) {
+    var f by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(20.dp)
+    Column(
+        Modifier.width(300.dp).clip(shape)
+            .background(if (selected) Color(0x248B5CF6) else Color(0xFF14121F))
+            .border(if (f) 3.dp else 2.dp, if (f) IrColors.Cyan else if (selected) IrColors.VioletLight else Color(0x1FFFFFFF), shape)
+            .onFocusChanged { f = it.isFocused }
+            .clickable(onClick = onClick)
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Box(Modifier.fillMaxWidth().height(150.dp).clip(RoundedCornerShape(12.dp)).background(if (pro) Color(0xFF07060D) else Color(0xFF0A1430))) {
+            if (pro) {
+                Box(Modifier.align(Alignment.TopEnd).fillMaxWidth(0.7f).height(108.dp).background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0xFF1B1040), Color(0xFFB85A68)))))
+                Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Brush.horizontalGradient(listOf(Color(0xFF07060D), Color(0x0007060D)))))
+                Box(Modifier.padding(start = 12.dp, top = 36.dp).width(110.dp).height(13.dp).background(Color(0xFFF5F3FF), RoundedCornerShape(3.dp)))
+                Box(Modifier.padding(start = 12.dp, top = 70.dp).width(62.dp).height(18.dp).background(Color.White, RoundedCornerShape(9.dp)).border(2.dp, IrColors.Cyan, RoundedCornerShape(9.dp)))
+                Row(Modifier.align(Alignment.BottomStart).padding(10.dp), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    listOf(0xFF4F72C9, 0xFFB0418E, 0xFF1C8F99, 0xFFC27A2C).forEach { c -> Box(Modifier.size(width = 58.dp, height = 28.dp).background(Color(c), RoundedCornerShape(5.dp))) }
+                }
+            } else {
+                Row(Modifier.padding(12.dp), horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.Bottom) {
+                    Box(Modifier.size(30.dp).background(Color(0xFF7C3AED), RoundedCornerShape(7.dp)))
+                    repeat(3) { Box(Modifier.size(22.dp).background(Color(0xFF1D2B55), RoundedCornerShape(5.dp))) }
+                }
+                Box(Modifier.align(Alignment.BottomStart).padding(12.dp).fillMaxWidth().height(60.dp).background(Color(0xFF24306B), RoundedCornerShape(8.dp)))
+                Box(Modifier.align(Alignment.BottomStart).padding(start = 22.dp, bottom = 22.dp).width(60.dp).height(16.dp).background(Color.White, RoundedCornerShape(8.dp)))
+            }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(title, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold, fontFamily = IrFonts.title)
+                Text(sub, color = IrColors.TextDim, fontSize = 13.sp)
+            }
+            Text(if (selected) "✓" else "", color = IrColors.Cyan, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        }
     }
 }
 

@@ -69,6 +69,9 @@ import com.irpro.tv.ui.WelcomeScreen
 import com.irpro.tv.ui.XtreamScreen
 import kotlinx.coroutines.delay
 
+/** Vrai après un changement de thème : on revient sur les Paramètres au lieu de rejouer l'intro. */
+var themeSwitched = false
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -77,8 +80,16 @@ class MainActivity : ComponentActivity() {
         // L'écran ne se met pas en veille pendant qu'on regarde
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         setContent {
+            val s by UserData.settings.collectAsState()
             // Téléphones Android 15 : le contenu ne passe pas sous les barres du système
-            Box(Modifier.fillMaxSize().background(Color.Black).safeDrawingPadding()) { App() }
+            Box(Modifier.fillMaxSize().background(Color.Black).safeDrawingPadding()) {
+                // Changer de thème reconstruit l'interface tout de suite (playlists, liste et réglages restent les mêmes)
+                androidx.compose.runtime.key(s.theme) {
+                    androidx.compose.material3.ProvideTextStyle(androidx.compose.material3.LocalTextStyle.current.copy(fontFamily = com.irpro.tv.ui.IrFonts.body)) {
+                        App(startScreen = if (themeSwitched) "settings" else "intro")
+                    }
+                }
+            }
         }
     }
 }
@@ -99,10 +110,11 @@ private class Nav {
 }
 
 @Composable
-fun App() {
+fun App(startScreen: String = "intro") {
     val ctx = LocalContext.current
     val store = remember(ctx) { PlaylistStore(ctx) }
-    var screen by rememberSaveable { mutableStateOf("intro") }
+    var screen by rememberSaveable { mutableStateOf(startScreen) }
+    LaunchedEffect(Unit) { if (themeSwitched) { delay(1500); themeSwitched = false } }
     var version by remember { mutableIntStateOf(0) }
     val content by ContentRepository.state.collectAsState()
     val settings by UserData.settings.collectAsState()
@@ -185,6 +197,7 @@ fun App() {
                         onRefresh = { if (!content.loading) ContentRepository.load(ctx, active, refresh = true) },
                         onCheckUpdate = { updateChecked = false; screen = "home" },
                         onBack = { screen = "home" },
+                        startSection = if (themeSwitched) 6 else 0,
                     )
                     screen == "search" -> SearchScreen(
                         catalog,
