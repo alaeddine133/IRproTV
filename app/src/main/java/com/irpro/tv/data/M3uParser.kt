@@ -21,9 +21,14 @@ object M3uParser {
         var logo = ""
         var group = ""
         var tvgId = ""
+        var epgUrl = ""
         lines.forEach { raw ->
             val line = raw.trim()
             when {
+                line.startsWith("#EXTM3U", ignoreCase = true) -> {
+                    val a = attr.findAll(line).associate { it.groupValues[1].lowercase() to it.groupValues[2] }
+                    epgUrl = (a["url-tvg"] ?: a["x-tvg-url"] ?: "").split(',').first().trim()
+                }
                 line.startsWith("#EXTINF", ignoreCase = true) -> {
                     val attrs = attr.findAll(line).associate { it.groupValues[1].lowercase() to it.groupValues[2] }
                     val after = line.substringAfterLast("\",", "").ifEmpty { line.substringAfter(",", "") }
@@ -75,6 +80,7 @@ object M3uParser {
             movieCategories = movieCats.values.toList(), movies = movies,
             seriesCategories = seriesCats.values.toList(), series = series,
             updatedAt = System.currentTimeMillis(),
+            epgUrl = epgUrl,
         ).sorted()
     }
 }

@@ -22,7 +22,11 @@ object FrenchPriority {
         return patterns.any { it.containsMatchIn(n) }
     }
 
+    /** Réglage « Français en premier » (Paramètres > Langue). */
+    @Volatile var enabled: Boolean = true
+
     fun sortCategories(list: List<Category>): List<Category> {
+        if (!enabled) return list
         val (fr, other) = list.partition { it.isFrench }
         return fr + other
     }

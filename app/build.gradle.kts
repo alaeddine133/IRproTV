@@ -19,6 +19,8 @@ android {
         targetSdk = 35
         versionCode = buildNumber
         versionName = "1.0.$buildNumber"
+        // Box TV et téléphones : processeurs ARM (garde l'APK plus léger)
+        ndk { abiFilters += listOf("armeabi-v7a", "arm64-v8a") }
     }
 
     signingConfigs {
@@ -49,6 +51,9 @@ android {
         compose = true
         buildConfig = true
     }
+    packaging {
+        jniLibs { useLegacyPackaging = true }
+    }
     lint {
         abortOnError = false
         checkReleaseBuilds = false
@@ -68,6 +73,15 @@ dependencies {
     val media3 = "1.5.1"
     implementation("androidx.media3:media3-exoplayer:$media3")
     implementation("androidx.media3:media3-ui:$media3")
+    implementation("androidx.media3:media3-exoplayer-hls:$media3")
+    // Sons Dolby (AC3/E-AC3), DTS… décodés même sur les box sans licence
+    implementation("org.jellyfin.media3:media3-ffmpeg-decoder:1.5.1+1")
+    // Lecteur de secours « compatible »
+    implementation("org.videolan.android:libvlc-all:3.6.0")
+    // Images (logos de chaînes, affiches)
+    implementation("io.coil-kt:coil-compose:2.7.0")
+    // QR code (ajout de playlist avec le téléphone)
+    implementation("com.google.zxing:core:3.5.3")
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 

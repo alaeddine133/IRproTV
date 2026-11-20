@@ -51,6 +51,8 @@ data class Catalog(
     val seriesCategories: List<Category> = emptyList(),
     val series: List<Series> = emptyList(),
     val updatedAt: Long = 0,
+    /** Lien du guide XMLTV annoncé par la liste M3U (url-tvg) */
+    val epgUrl: String = "",
 ) {
     val isEmpty get() = channels.isEmpty() && movies.isEmpty() && series.isEmpty()
 

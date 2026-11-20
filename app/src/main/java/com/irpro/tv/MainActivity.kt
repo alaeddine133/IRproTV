@@ -28,6 +28,7 @@ import com.irpro.tv.ui.XtreamScreen
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        com.irpro.tv.data.UserData.init(this)
         setContent { App() }
     }
 }

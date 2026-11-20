@@ -18,6 +18,7 @@ class CatalogCache(context: Context) {
             JsonWriter(bw).use { w ->
                 w.beginObject()
                 w.name("updatedAt").value(c.updatedAt)
+                w.name("epg").value(c.epgUrl)
                 w.name("cats").beginArray()
                 (c.liveCategories + c.movieCategories + c.seriesCategories).forEach {
                     w.beginArray().value(it.id).value(it.name).value(it.kind.name).endArray()
@@ -57,12 +58,14 @@ class CatalogCache(context: Context) {
             f.bufferedReader().use { br ->
                 val r = JsonReader(br)
                 var updated = 0L
+                var epg = ""
                 val live = ArrayList<Category>(); val mcat = ArrayList<Category>(); val scat = ArrayList<Category>()
                 val ch = ArrayList<Channel>(); val mv = ArrayList<Movie>(); val se = ArrayList<Series>()
                 r.beginObject()
                 while (r.hasNext()) {
                     when (r.nextName()) {
                         "updatedAt" -> updated = r.nextLong()
+                        "epg" -> epg = r.nextString()
                         "cats" -> arr(r) {
                             val c = Category(r.nextString(), r.nextString(), Kind.valueOf(r.nextString()))
                             when (c.kind) { Kind.LIVE -> live += c; Kind.MOVIE -> mcat += c; Kind.SERIES -> scat += c }
@@ -84,7 +87,7 @@ class CatalogCache(context: Context) {
                     }
                 }
                 r.endObject()
-                Catalog(live, ch, mcat, mv, scat, se, updated)
+                Catalog(live, ch, mcat, mv, scat, se, updated, epg)
             }
         } catch (e: Exception) {
             null
