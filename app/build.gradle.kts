@@ -75,7 +75,7 @@ dependencies {
     implementation("androidx.media3:media3-ui:$media3")
     implementation("androidx.media3:media3-exoplayer-hls:$media3")
     // Sons Dolby (AC3/E-AC3), DTS… décodés même sur les box sans licence
-    implementation("org.jellyfin.media3:media3-ffmpeg-decoder:1.5.1+1")
+    implementation("org.jellyfin.media3:media3-ffmpeg-decoder:1.5.0+1")
     // Lecteur de secours « compatible »
     implementation("org.videolan.android:libvlc-all:3.6.0")
     // Images (logos de chaînes, affiches)
