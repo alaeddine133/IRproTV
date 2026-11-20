@@ -221,7 +221,7 @@ fun App(startScreen: String = "intro") {
                         startSection = if (themeSwitched) 6 else 0,
                         onProfiles = { screen = "profiles" },
                     )
-                    screen == "search" && com.irpro.tv.ui.ThemeState.pro -> com.irpro.tv.ui.ProSearchScreen(
+                    screen == "search" -> com.irpro.tv.ui.ProSearchScreen(
                         catalog,
                         onChannel = { id -> byId[id]?.let { playChannel(it, it.categoryId, "search") } },
                         onMovie = { openMovie(it, "search") },
@@ -233,13 +233,6 @@ fun App(startScreen: String = "intro") {
                         onMovie = { openMovie(it, "mylist") },
                         onSeries = { openSeries(it, "mylist") },
                         onChannel = { ch -> playChannel(ch, CAT_FAV, "mylist") },
-                        onBack = { screen = "home" },
-                    )
-                    screen == "search" -> SearchScreen(
-                        catalog,
-                        onChannel = { id -> byId[id]?.let { playChannel(it, it.categoryId, "search") } },
-                        onMovie = { openMovie(it, "search") },
-                        onSeries = { openSeries(it, "search") },
                         onBack = { screen = "home" },
                     )
                     screen == "live" -> LiveScreen(
@@ -284,7 +277,7 @@ fun App(startScreen: String = "intro") {
                         val here = screen
                         val m = catalog.movies.firstOrNull { it.id == here.removePrefix("movie:") }
                         if (m == null) LaunchedEffect(Unit) { screen = "movies" }
-                        else if (com.irpro.tv.ui.ThemeState.pro) com.irpro.tv.ui.ProMovieDetailScreen(active, catalog, m,
+                        else com.irpro.tv.ui.ProMovieDetailScreen(active, catalog, m,
                             onPlay = { from ->
                                 nav.vodStart = from
                                 nav.vodQueue = listOf(VodEntry(m.id, m.name, "", m.url, "movie", ""))
@@ -292,30 +285,16 @@ fun App(startScreen: String = "intro") {
                             },
                             onOpen = { id -> screen = "movie:$id" },
                             onBack = { screen = nav.detailBack })
-                        else MovieDetailScreen(active, m,
-                            onPlay = { from ->
-                                nav.vodStart = from
-                                nav.vodQueue = listOf(VodEntry(m.id, m.name, "", m.url, "movie", ""))
-                                nav.vodIndex = 0; nav.vodBack = here; screen = "vod"
-                            },
-                            onBack = { screen = nav.detailBack })
                     }
                     screen.startsWith("show:") -> {
                         val here = screen
                         val s = catalog.series.firstOrNull { it.id == here.removePrefix("show:") }
                         if (s == null) LaunchedEffect(Unit) { screen = "series" }
-                        else if (com.irpro.tv.ui.ThemeState.pro) com.irpro.tv.ui.ProSeriesDetailScreen(active, catalog, s,
+                        else com.irpro.tv.ui.ProSeriesDetailScreen(active, catalog, s,
                             onPlay = { eps, idx, from ->
                                 nav.vodStart = from
                                 nav.vodQueue = eps.map { VodEntry(it.id, s.name, "S${it.season} · E${it.number} · ${it.title}", it.url, "episode", s.id) }
                                 nav.vodIndex = 0.coerceAtLeast(idx); nav.vodBack = here; screen = "vod"
-                            },
-                            onBack = { screen = nav.detailBack })
-                        else SeriesDetailScreen(active, s,
-                            onPlay = { eps, idx, from ->
-                                nav.vodStart = from
-                                nav.vodQueue = eps.map { VodEntry(it.id, s.name, "S${it.season} · E${it.number} · ${it.title}", it.url, "episode", s.id) }
-                                nav.vodIndex = idx; nav.vodBack = here; screen = "vod"
                             },
                             onBack = { screen = nav.detailBack })
                     }
@@ -349,7 +328,7 @@ fun App(startScreen: String = "intro") {
                         LaunchedEffect(updateChecked) {
                             if (!updateChecked) { delay(2500); update = Updater.check(); updateChecked = true }
                         }
-                        update?.let { if (com.irpro.tv.ui.ThemeState.pro) com.irpro.tv.ui.ProUpdateDialog(it, onLater = { update = null }) else UpdateDialog(it, onLater = { update = null }) }
+                        update?.let { com.irpro.tv.ui.ProUpdateDialog(it, onLater = { update = null }) }
                     }
                 }
 

@@ -61,6 +61,7 @@ import com.irpro.tv.data.Series
 import com.irpro.tv.data.SeriesDetail
 import com.irpro.tv.data.UserData
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /** Une carte affichable (film ou série). */
 data class Poster(val id: String, val title: String, val image: String, val sub: String = "", val progress: Float? = null)
@@ -124,38 +125,89 @@ fun VodCatalogScreen(
         if (!focusedOnce && shelves.isNotEmpty()) { delay(60); runCatching { first.requestFocus() }; focusedOnce = true }
     }
     val heroSeries = remember(hero) { if (series) catalog.series.firstOrNull { it.id == hero?.id } else null }
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val shelfFocus = remember(shelves) { shelves.map { FocusRequester() } }
+    fun goShelf(i: Int) {
+        if (i < 0) return
+        scope.launch { listState.animateScrollToItem(i); delay(120); runCatching { shelfFocus[i].requestFocus() } }
+    }
+    val total = if (series) catalog.series.size else catalog.movies.size
+    val catCount = if (series) catalog.seriesCategories.size else catalog.movieCategories.size
+    val tint = if (series) listOf(Color(0xFF0C2B3E), Color(0xFF071722)) else listOf(Color(0xFF2A1250), Color(0xFF120A26))
 
-    Box(Modifier.fillMaxSize().background(IrColors.Night)) {
-        // Fond : affiche de l'élément sélectionné, en grand à droite
-        hero?.let {
-            Box(Modifier.align(Alignment.TopEnd).fillMaxWidth(0.55f).fillMaxHeight(0.62f)) {
-                NetImage(it.image, "", 2000.dp, 2000.dp, Modifier.fillMaxSize(), crop = true)
-                Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(IrColors.Night, Color(0x660A1430), Color.Transparent))))
-                Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Transparent, Color(0x330A1430), IrColors.Night))))
+    MosaicBackground {
+        Column(Modifier.fillMaxSize().padding(start = 40.dp, end = 40.dp, top = 22.dp)) {
+            MosaicHeader(if (series) "Séries" else "Films", "${formatCount(total)} ${if (series) "séries" else "films"} · $catCount catégories")
+            Spacer(Modifier.height(14.dp))
+            // Haut : grande tuile « À la une » (l'élément sélectionné) + tuiles rapides
+            Row(Modifier.fillMaxWidth().height(165.dp), horizontalArrangement = Arrangement.spacedBy(13.dp)) {
+                val heroShape = RoundedCornerShape(16.dp)
+                var hf by remember { mutableStateOf(false) }
+                Box(
+                    Modifier.weight(1.45f).fillMaxHeight().mosaicAppear(0).mosaicRing(hf, heroShape).clip(heroShape)
+                        .background(Brush.linearGradient(tint))
+                        .onFocusChanged { if (it.isFocused && !hf) Sfx.move(); hf = it.isFocused }
+                        .clickable { hero?.let { Sfx.select(); onOpen(it.id) } }
+                ) {
+                    hero?.let { h ->
+                        Box(Modifier.align(Alignment.CenterEnd).fillMaxHeight().fillMaxWidth(0.62f)) {
+                            NetImage(h.image, "", 2000.dp, 2000.dp, Modifier.fillMaxSize(), crop = true)
+                        }
+                    }
+                    Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to Color(0xF207060D), 0.45f to Color(0x9907060D), 0.8f to Color.Transparent)))
+                    Column(Modifier.padding(18.dp).fillMaxWidth(0.62f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                        Text(if (shelves.firstOrNull()?.items?.firstOrNull()?.id == hero?.id) "À LA UNE" else if (series) "SÉRIE" else "FILM",
+                            color = Mz.Bg, fontSize = 8.sp, fontWeight = FontWeight.Bold,
+                            modifier = Modifier.background(Mz.Bar, RoundedCornerShape(4.dp)).padding(horizontal = 7.dp, vertical = 3.dp))
+                        Text(hero?.title?.uppercase() ?: "", color = Mz.Text, fontSize = 24.sp, lineHeight = 25.sp, fontWeight = FontWeight.ExtraBold, fontFamily = IrFonts.title,
+                            maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        val sub = hero?.sub?.takeIf { it.isNotBlank() && it != "FR" } ?: heroSeries?.plot?.takeIf { it.isNotBlank() }
+                        sub?.let { Text(it, color = Color(0xFFC9C5DC), fontSize = 10.sp, maxLines = 2, overflow = TextOverflow.Ellipsis) }
+                        Spacer(Modifier.weight(1f))
+                        Row(Modifier.height(28.dp).background(Color.White, RoundedCornerShape(50)).padding(horizontal = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text("▶", color = Mz.Ink, fontSize = 9.sp)
+                            Text("Voir la fiche", color = Mz.Ink, fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = IrFonts.title)
+                        }
+                    }
+                }
+                // Tuiles rapides : sautent à la rangée correspondante
+                val quick = listOf(
+                    Triple("Reprendre", shelves.indexOfFirst { it.title == "Reprendre" }, listOf(Color(0xFF3B1C8C), Color(0xFF1A0E3D))),
+                    Triple(if (series) "Français" else "Français", shelves.indexOfFirst { it.categoryId == "__fr" }, listOf(Color(0xFF0C2B3E), Color(0xFF071722))),
+                    Triple(if (series) "Ma liste" else "Nouveautés", shelves.indexOfFirst { if (series) it.title == "Ma liste" else it.title.startsWith("Nouveautés") }, listOf(Color(0x0DFFFFFF), Color(0x0DFFFFFF))),
+                    Triple(if (series) "Catégories" else "Ma liste", if (series) shelves.indexOfFirst { it.categoryId != null && it.categoryId != "__fr" } else shelves.indexOfFirst { it.title == "Ma liste" }, listOf(Color(0x0DFFFFFF), Color(0x0DFFFFFF))),
+                )
+                Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    quick.chunked(2).forEachIndexed { r, row ->
+                        Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            row.forEachIndexed { c, (label, idx, colors) ->
+                                val n = shelves.getOrNull(idx)?.total
+                                QuickTile(label, if (n != null) formatCount(n) + if (series) " séries" else " films" else "Vide pour l'instant", colors,
+                                    Modifier.weight(1f).fillMaxHeight().mosaicAppear(1 + r * 2 + c)) { goShelf(idx) }
+                            }
+                        }
+                    }
+                }
             }
-        }
-        Column(Modifier.fillMaxSize()) {
-            Column(Modifier.padding(start = 40.dp, top = 24.dp, end = 40.dp).fillMaxWidth(0.5f).height(170.dp)) {
-                Text(if (series) "Séries" else "Films", color = IrColors.Cyan, fontSize = 15.sp)
-                Spacer(Modifier.height(6.dp))
-                Text(hero?.title ?: "", color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                if (!hero?.sub.isNullOrBlank() && hero?.sub != "FR") Text(hero?.sub ?: "", color = IrColors.TextDim, fontSize = 14.sp, maxLines = 1)
-                heroSeries?.plot?.takeIf { it.isNotBlank() }?.let { Text(it, color = Color(0xFFCCD2E0), fontSize = 14.sp, maxLines = 3, overflow = TextOverflow.Ellipsis) }
-                Spacer(Modifier.height(4.dp))
-                Text("OK : ouvrir la fiche", color = IrColors.TextDim, fontSize = 12.sp)
-            }
-            if (shelves.isEmpty()) Text("Aucun contenu dans cette playlist.", color = Color.White, modifier = Modifier.padding(40.dp))
-            LazyColumn(contentPadding = PaddingValues(bottom = 40.dp)) {
+            if (shelves.isEmpty()) Text("Aucun contenu dans cette playlist.", color = Mz.Text, modifier = Modifier.padding(20.dp))
+            LazyColumn(state = listState, contentPadding = PaddingValues(top = 6.dp, bottom = 40.dp), modifier = Modifier.mosaicAppear(5)) {
                 itemsIndexed(shelves, key = { i, s -> "$i:${s.title}" }) { si, shelf ->
                     Column(Modifier.padding(top = 10.dp)) {
-                        Row(Modifier.padding(start = 40.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                            if (shelf.items.firstOrNull()?.sub == "FR" && shelf.categoryId != null) Text("●  ", color = IrColors.Cyan, fontSize = 13.sp)
-                            Text(shelf.title, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
-                            if (shelf.total > shelf.items.size) Text("  · ${formatCount(shelf.total)}", color = IrColors.TextDim, fontSize = 13.sp)
+                        Row(Modifier.padding(bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                            if (shelf.items.firstOrNull()?.sub == "FR" && shelf.categoryId != null) Text("●  ", color = Mz.Cyan, fontSize = 11.sp)
+                            Text(shelf.title, color = Mz.Text, fontSize = 14.sp, fontWeight = FontWeight.Bold, fontFamily = IrFonts.title)
+                            if (shelf.total > shelf.items.size) Text("  · ${formatCount(shelf.total)}", color = Mz.Mute, fontSize = 11.sp)
                         }
-                        LazyRow(contentPadding = PaddingValues(horizontal = 40.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                        LazyRow(contentPadding = PaddingValues(horizontal = 6.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             itemsIndexed(shelf.items.distinctBy { it.id }, key = { _, p -> p.id }) { i, p ->
-                                PosterCard(p, if (si == 0 && i == 0) Modifier.focusRequester(first) else Modifier, onFocus = { hero = p }) { onOpen(p.id) }
+                                val fm = when {
+                                    i != 0 -> Modifier
+                                    si == 0 -> Modifier.focusRequester(first).focusRequester(shelfFocus[si])
+                                    else -> Modifier.focusRequester(shelfFocus[si])
+                                }
+                                PosterCard(p, fm, onFocus = { hero = p }) { onOpen(p.id) }
                             }
                             if (shelf.categoryId != null && shelf.total > shelf.items.size) item {
                                 SeeAllCard(shelf.total) { onSeeAll(shelf.categoryId) }
@@ -169,13 +221,29 @@ fun VodCatalogScreen(
 }
 
 @Composable
+private fun QuickTile(label: String, sub: String, colors: List<Color>, modifier: Modifier, onClick: () -> Unit) {
+    var f by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(13.dp)
+    Column(
+        modifier.mosaicRing(f, shape).clip(shape).background(Brush.linearGradient(colors)).border(1.dp, Mz.TileLine, shape)
+            .onFocusChanged { if (it.isFocused && !f) Sfx.move(); f = it.isFocused }
+            .clickable { Sfx.select(); onClick() }
+            .padding(12.dp),
+        verticalArrangement = Arrangement.Bottom,
+    ) {
+        Text(label, color = Mz.Text, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, fontFamily = IrFonts.title)
+        Text(sub, color = Color(0xFFCFC9EA), fontSize = 9.sp, maxLines = 1)
+    }
+}
+
+@Composable
 fun PosterCard(p: Poster, modifier: Modifier = Modifier, onFocus: () -> Unit = {}, onClick: () -> Unit) {
     var f by remember { mutableStateOf(false) }
     val sc by animateFloatAsState(if (f) 1.08f else 1f, label = "poster")
     Column(modifier.width(128.dp)) {
         Box(
-            Modifier.scale(sc).size(128.dp, 186.dp).clip(RoundedCornerShape(10.dp))
-                .border(if (f) 3.dp else 0.dp, if (f) IrColors.Cyan else Color.Transparent, RoundedCornerShape(10.dp))
+            Modifier.scale(sc).size(128.dp, 186.dp).mosaicRing(f, RoundedCornerShape(10.dp)).clip(RoundedCornerShape(10.dp))
+                .border(1.dp, Mz.TileLine, RoundedCornerShape(10.dp))
                 .onFocusChanged { if (it.isFocused && !f) Sfx.move(); f = it.isFocused; if (it.isFocused) onFocus() }
                 .clickable { Sfx.select(); onClick() }
         ) {
@@ -187,7 +255,7 @@ fun PosterCard(p: Poster, modifier: Modifier = Modifier, onFocus: () -> Unit = {
             }
         }
         Spacer(Modifier.height(6.dp))
-        Text(p.title, color = if (f) Color.White else Color(0xFFCCD2E0), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(p.title, color = if (f) Color.White else Mz.Soft, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, fontFamily = IrFonts.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -195,9 +263,9 @@ fun PosterCard(p: Poster, modifier: Modifier = Modifier, onFocus: () -> Unit = {
 private fun SeeAllCard(total: Int, onClick: () -> Unit) {
     var f by remember { mutableStateOf(false) }
     Box(
-        Modifier.size(128.dp, 186.dp).clip(RoundedCornerShape(10.dp))
-            .background(if (f) IrColors.Violet else IrColors.Card)
-            .border(if (f) 3.dp else 1.dp, if (f) IrColors.Cyan else Color(0x22FFFFFF), RoundedCornerShape(10.dp))
+        Modifier.size(128.dp, 186.dp).mosaicRing(f, RoundedCornerShape(10.dp)).clip(RoundedCornerShape(10.dp))
+            .background(Brush.linearGradient(listOf(Color(0xFF3B1C8C), Color(0xFF1A0E3D))))
+            .border(1.dp, Color(0x4DA78BFA), RoundedCornerShape(10.dp))
             .onFocusChanged { f = it.isFocused }.clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) { Text("Tout voir\n${formatCount(total)}", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold) }
@@ -218,8 +286,8 @@ fun VodGridScreen(playlist: Playlist, catalog: Catalog, series: Boolean, categor
     }
     val first = remember { FocusRequester() }
     LaunchedEffect(Unit) { delay(60); runCatching { first.requestFocus() } }
-    Column(Modifier.fillMaxSize().background(IrColors.Night).padding(start = 36.dp, end = 36.dp, top = 22.dp)) {
-        Text("$title · ${formatCount(items.size)}", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+    MosaicBackground { Column(Modifier.fillMaxSize().padding(start = 40.dp, end = 40.dp, top = 22.dp)) {
+        MosaicHeader(title, formatCount(items.size))
         Spacer(Modifier.height(14.dp))
         LazyVerticalGrid(GridCells.Adaptive(140.dp), verticalArrangement = Arrangement.spacedBy(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = PaddingValues(6.dp, 6.dp, 6.dp, 40.dp)) {
@@ -227,7 +295,7 @@ fun VodGridScreen(playlist: Playlist, catalog: Catalog, series: Boolean, categor
                 PosterCard(p, if (i == 0) Modifier.focusRequester(first) else Modifier) { onOpen(p.id) }
             }
         }
-    }
+    }}
 }
 
 /* ---------------- Fiche film ---------------- */

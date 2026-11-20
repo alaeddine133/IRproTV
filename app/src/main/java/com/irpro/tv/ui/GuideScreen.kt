@@ -1,5 +1,15 @@
 package com.irpro.tv.ui
 
+import androidx.compose.foundation.layout.Arrangement
+
+import androidx.compose.foundation.layout.size
+
+import androidx.compose.ui.draw.shadow
+
+import androidx.compose.foundation.layout.PaddingValues
+
+import androidx.compose.ui.graphics.Brush
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -102,118 +112,128 @@ fun GuideScreen(
     }
     LaunchedEffect(toast) { if (toast != null) { delay(2200); toast = null } }
 
-    Column(Modifier.fillMaxSize().background(IrColors.Night).padding(16.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IrIconView(IrIcon.GUIDE, IrColors.Cyan, 26.dp)
-            Spacer(Modifier.width(10.dp))
-            Text("Guide TV", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.width(18.dp))
-            IrButton(
-                "◀  ${cats.getOrNull(catIdx)?.second ?: ""}  ▶", primary = false,
-                modifier = Modifier.onPreviewKeyEvent { e ->
-                    if (e.type != KeyEventType.KeyDown) false
-                    else when (e.key) {
-                        Key.DirectionLeft -> { catIdx = (catIdx - 1 + cats.size) % cats.size; true }
-                        Key.DirectionRight -> { catIdx = (catIdx + 1) % cats.size; true }
-                        else -> false
+    MosaicBackground { Column(Modifier.fillMaxSize().padding(horizontal = 40.dp, vertical = 20.dp)) {
+        MosaicHeader("Guide TV", extra = {
+            Spacer(Modifier.width(12.dp))
+            var cf by remember { mutableStateOf(false) }
+            val pill = RoundedCornerShape(50)
+            Text(
+                "◀  ${cats.getOrNull(catIdx)?.second ?: ""}  ▶", color = Mz.Bg, fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = IrFonts.title,
+                modifier = Modifier.mosaicRing(cf, pill).clip(pill).background(Mz.Pill)
+                    .onFocusChanged { cf = it.isFocused }
+                    .onPreviewKeyEvent { e ->
+                        if (e.type != KeyEventType.KeyDown) false
+                        else when (e.key) {
+                            Key.DirectionLeft -> { catIdx = (catIdx - 1 + cats.size) % cats.size; true }
+                            Key.DirectionRight -> { catIdx = (catIdx + 1) % cats.size; true }
+                            else -> false
+                        }
                     }
-                },
-                onClick = { catIdx = (catIdx + 1) % cats.size },
+                    .clickable { catIdx = (catIdx + 1) % cats.size }
+                    .padding(horizontal = 12.dp, vertical = 5.dp),
             )
-            Spacer(Modifier.weight(1f))
-            Text("Aujourd'hui · ${hhmm(now)}", color = IrColors.TextDim, fontSize = 14.sp)
+            Text("◀ ▶ changer de catégorie", color = Mz.Mute, fontSize = 9.sp, modifier = Modifier.padding(start = 10.dp))
+        })
+        Spacer(Modifier.height(12.dp))
+
+        // Grande tuile : programme sélectionné
+        val sel = selected
+        Row(
+            Modifier.fillMaxWidth().height(96.dp).mosaicAppear(0).clip(RoundedCornerShape(15.dp))
+                .background(Brush.linearGradient(listOf(Color(0xFF2A1250), Color(0xFF14104A), Color(0xFF0C2B3E))))
+                .border(1.dp, Color(0x40A78BFA), RoundedCornerShape(15.dp)).padding(horizontal = 18.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            if (sel == null) Text("Choisis un programme", color = Mz.Dim, fontSize = 13.sp)
+            else {
+                val (ch, p) = sel
+                Box(Modifier.size(70.dp, 55.dp).clip(RoundedCornerShape(11.dp)).background(Brush.linearGradient(listOf(Color(0xFF7C3CE6), Color(0xFF2A1470)))), contentAlignment = Alignment.Center) {
+                    NetImage(ch.logo, initials(ch.name), 60.dp, 42.dp)
+                }
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(ch.name + (p?.let { " · ${hhmm(it.start)} – ${hhmm(it.end)}" + if (it.isNow()) " · en cours" else "" } ?: ""),
+                        color = Color(0xFFCFC9EA), fontSize = 10.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(p?.title ?: "Programme non communiqué", color = Mz.Text, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, fontFamily = IrFonts.title,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (p != null && p.desc.isNotBlank()) Text(p.desc, color = Mz.Dim, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                if (p != null) Text(if (p.start > now) "OK : me prévenir" else "OK : regarder", color = Mz.Ink, fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = IrFonts.title,
+                    modifier = Modifier.background(Color.White, RoundedCornerShape(50)).padding(horizontal = 14.dp, vertical = 8.dp))
+            }
         }
         Spacer(Modifier.height(10.dp))
-        Row(Modifier.fillMaxSize()) {
-            BoxWithConstraints(Modifier.weight(1.7f).fillMaxHeight()) {
-                val gridW = maxWidth - CH_COL
-                val pxPerMs = gridW.value / (windowEnd - windowStart)
-                Column {
-                    // En-tête des heures
-                    Row(Modifier.height(24.dp)) {
-                        Spacer(Modifier.width(CH_COL))
-                        for (h in 0 until WINDOW_H * 2) Text(hhmm(windowStart + h * 1_800_000L), color = IrColors.TextDim, fontSize = 12.sp, modifier = Modifier.width(gridW / (WINDOW_H * 2)))
-                    }
-                    Box(Modifier.fillMaxSize()) {
-                        LazyColumn(state = listState) {
-                            itemsIndexed(channels, key = { _, c -> c.id }) { i, ch ->
-                                val progs = (epg[ch.id] ?: Epg.cached(ch).orEmpty()).filter { it.end > windowStart && it.start < windowEnd }
-                                Row(Modifier.height(44.dp).padding(bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Text("${ch.num}  ${ch.name}", color = Color.White, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier.width(CH_COL).fillMaxHeight().padding(end = 4.dp).background(Color(0xFF12204A), RoundedCornerShape(6.dp)).padding(horizontal = 8.dp, vertical = 11.dp))
-                                    Box(Modifier.width(gridW).fillMaxHeight()) {
-                                        // Une seule liste de cases (case « non communiqué » comprise) : le focus ne saute pas quand le guide arrive
-                                        val unknown = progs.isEmpty()
-                                        val cells = if (unknown) listOf(Program("Programme non communiqué", windowStart, windowEnd)) else progs
-                                        cells.forEachIndexed { pi, p ->
-                                            val s = maxOf(p.start, windowStart); val e = minOf(p.end, windowEnd)
-                                            val x = ((s - windowStart) * pxPerMs).dp
-                                            val w = (((e - s) * pxPerMs).dp - 3.dp).coerceAtLeast(20.dp)
-                                            val isFirst = pi == 0 && ch.id == focusId
-                                            GuideCell(p.title, x, w, isFirst, firstFocus, live = !unknown && p.isNow(),
-                                                onFocus = { selected = ch to if (unknown) null else p },
-                                                onClick = {
-                                                    if (unknown || p.isNow() || p.start < now) onPlay(ch, catId)
-                                                    else { Reminders.add(Reminders.R(ch.id, p.title, p.start)); toast = "Rappel ajouté : ${p.title} à ${hhmm(p.start)}" }
-                                                })
-                                        }
+
+        BoxWithConstraints(Modifier.fillMaxSize().mosaicAppear(1)) {
+            val gridW = maxWidth - CH_COL
+            val pxPerMs = gridW.value / (windowEnd - windowStart)
+            Column {
+                // En-tête des heures
+                Row(Modifier.height(20.dp)) {
+                    Spacer(Modifier.width(CH_COL))
+                    for (h in 0 until WINDOW_H * 2) Text(hhmm(windowStart + h * 1_800_000L), color = Mz.Mute, fontSize = 10.sp, modifier = Modifier.width(gridW / (WINDOW_H * 2)))
+                }
+                Box(Modifier.fillMaxSize()) {
+                    LazyColumn(state = listState, contentPadding = PaddingValues(vertical = 4.dp)) {
+                        itemsIndexed(channels, key = { _, c -> c.id }) { i, ch ->
+                            val progs = (epg[ch.id] ?: Epg.cached(ch).orEmpty()).filter { it.end > windowStart && it.start < windowEnd }
+                            Row(Modifier.height(44.dp).padding(bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Row(
+                                    Modifier.width(CH_COL - 6.dp).fillMaxHeight().clip(RoundedCornerShape(9.dp)).background(Mz.Tile).padding(horizontal = 7.dp),
+                                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp),
+                                ) {
+                                    NetImage(ch.logo, initials(ch.name), 34.dp, 26.dp)
+                                    Text(ch.name, color = Mz.Text, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                }
+                                Spacer(Modifier.width(6.dp))
+                                Box(Modifier.width(gridW).fillMaxHeight()) {
+                                    // Une seule liste de cases (case « non communiqué » comprise) : le focus ne saute pas quand le guide arrive
+                                    val unknown = progs.isEmpty()
+                                    val cells = if (unknown) listOf(Program("Programme non communiqué", windowStart, windowEnd)) else progs
+                                    cells.forEachIndexed { pi, p ->
+                                        val s = maxOf(p.start, windowStart); val e = minOf(p.end, windowEnd)
+                                        val x = ((s - windowStart) * pxPerMs).dp
+                                        val w = (((e - s) * pxPerMs).dp - 6.dp).coerceAtLeast(20.dp)
+                                        val isFirst = pi == 0 && ch.id == focusId
+                                        GuideCell(p.title, if (unknown) "" else "${hhmm(p.start)} – ${hhmm(p.end)}", x, w, isFirst, firstFocus, live = !unknown && p.isNow(),
+                                            onFocus = { selected = ch to if (unknown) null else p },
+                                            onClick = {
+                                                if (unknown || p.isNow() || p.start < now) onPlay(ch, catId)
+                                                else { Reminders.add(Reminders.R(ch.id, p.title, p.start)); toast = "Rappel ajouté : ${p.title} à ${hhmm(p.start)}" }
+                                            })
                                     }
                                 }
                             }
                         }
-                        // Trait « maintenant »
-                        Box(Modifier.offset(x = CH_COL + ((now - windowStart) * pxPerMs).dp).width(2.dp).fillMaxHeight().background(IrColors.Cyan))
                     }
-                }
-            }
-            // Fiche du programme
-            Column(
-                Modifier.weight(1f).fillMaxHeight().padding(start = 14.dp)
-                    .background(Color(0xFF12204A), RoundedCornerShape(14.dp)).border(1.dp, Color(0x5922D3EE), RoundedCornerShape(14.dp)).padding(16.dp)
-            ) {
-                val sel = selected
-                if (sel == null) Text("Choisis un programme", color = IrColors.TextDim)
-                else {
-                    val (ch, p) = sel
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        NetImage(ch.logo, initials(ch.name), 60.dp, 40.dp)
-                        Spacer(Modifier.width(10.dp))
-                        Text(ch.name, color = IrColors.Cyan, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                    Spacer(Modifier.height(10.dp))
-                    Text(p?.title ?: "Programme non communiqué", color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.SemiBold)
-                    if (p != null) {
-                        Text("${hhmm(p.start)} – ${hhmm(p.end)}" + if (p.isNow()) " · en cours" else "", color = IrColors.TextDim, fontSize = 14.sp)
-                        Spacer(Modifier.height(8.dp))
-                        Text(p.desc.ifBlank { "Pas de résumé." }, color = Color(0xFFCCD2E0), fontSize = 14.sp, maxLines = 8, overflow = TextOverflow.Ellipsis)
-                        Spacer(Modifier.height(10.dp))
-                        Text(if (p.start > now) "OK : me prévenir quand ça commence" else "OK : regarder", color = IrColors.Cyan, fontSize = 13.sp)
-                    }
+                    // Trait rouge « maintenant »
+                    Box(Modifier.offset(x = CH_COL + ((now - windowStart) * pxPerMs).dp).width(2.dp).fillMaxHeight()
+                        .shadow(6.dp, RoundedCornerShape(1.dp), ambientColor = Mz.Live, spotColor = Mz.Live).background(Mz.Live))
                 }
             }
         }
-    }
+    } }
     toast?.let { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) { ToastBox(it) } }
 }
 
 @Composable
 private fun GuideCell(
-    title: String, x: Dp, w: Dp, first: Boolean, firstFocus: FocusRequester, live: Boolean = false,
+    title: String, time: String, x: Dp, w: Dp, first: Boolean, firstFocus: FocusRequester, live: Boolean = false,
     onFocus: () -> Unit, onClick: () -> Unit,
 ) {
     var f by remember { mutableStateOf(false) }
-    Box(
+    val shape = RoundedCornerShape(9.dp)
+    Column(
         Modifier.offset(x = x).width(w).fillMaxHeight()
             .then(if (first) Modifier.focusRequester(firstFocus) else Modifier)
-            .clip(RoundedCornerShape(6.dp))
-            .background(if (f) IrColors.Violet else if (live) Color(0xFF1C2E66) else Color(0xFF16244F))
-            .border(if (f) 2.dp else 0.dp, if (f) IrColors.Cyan else Color.Transparent, RoundedCornerShape(6.dp))
-            .onFocusChanged { f = it.isFocused; if (it.isFocused) onFocus() }
+            .mosaicRing(f, shape)
+            .clip(shape)
+            .background(if (f) Color.White else if (live) Color(0x388B5CF6) else Mz.Tile)
+            .onFocusChanged { if (it.isFocused && !f) Sfx.move(); f = it.isFocused; if (it.isFocused) onFocus() }
             .clickable(onClick = onClick)
-            .padding(horizontal = 8.dp),
-        contentAlignment = Alignment.CenterStart,
+            .padding(horizontal = 9.dp),
+        verticalArrangement = Arrangement.Center,
     ) {
-        Text(title, color = Color.White, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(title, color = if (f) Mz.Ink else Mz.Text, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (time.isNotBlank()) Text(time, color = if (f) Color(0xFF4B4766) else Mz.Mute, fontSize = 8.sp, maxLines = 1)
     }
 }
-
