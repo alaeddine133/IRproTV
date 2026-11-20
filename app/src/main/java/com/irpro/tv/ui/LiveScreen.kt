@@ -210,6 +210,7 @@ fun ToastBox(text: String, modifier: Modifier = Modifier) {
     )
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun CatRow(label: String, count: Int?, selected: Boolean, modifier: Modifier, fr: Boolean = false, onFocus: () -> Unit) {
     var f by remember { mutableStateOf(false) }
