@@ -405,7 +405,7 @@ fun VodPlayerScreen(
                     if (dur > 0) Text("${clockTime(dur)} · fin à ${hhmm(System.currentTimeMillis() + (dur - pos))}", color = Color(0xFFCCD2E0), fontSize = 13.sp)
                 }
                 Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
-                    val bump = { controls++ }
+                    val bump: () -> Unit = { controls++ }
                     if (prev != null) CtlButton("⏮", onFocus = bump) { save(); index-- }
                     CtlButton("−10", onFocus = bump) { seekBy(-10_000); controls++ }
                     CtlButton(if (playing) "❚❚" else "▶", big = true, modifier = Modifier.focusRequester(playFocus), onFocus = bump) {
