@@ -51,6 +51,15 @@ android {
         compose = true
         buildConfig = true
     }
+    // En plus de l'APK complet : un APK « box » plus léger (processeurs 32 bits seulement)
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("armeabi-v7a", "arm64-v8a")
+            isUniversalApk = true
+        }
+    }
     packaging {
         jniLibs { useLegacyPackaging = true }
     }

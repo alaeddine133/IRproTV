@@ -36,7 +36,11 @@ object Updater {
             var url = ""
             for (i in 0 until assets.length()) {
                 val a = assets.getJSONObject(i)
-                if (a.optString("name").endsWith(".apk")) { url = a.optString("browser_download_url"); break }
+                // Box 32 bits : version légère ; sinon la version complète
+                val wanted = if (Build.SUPPORTED_64_BIT_ABIS.isEmpty()) "IRPRO-TV-box.apk" else "IRPRO-TV.apk"
+                val n = a.optString("name")
+                if (n == wanted) { url = a.optString("browser_download_url"); break }
+                if (n == "IRPRO-TV.apk" && url.isEmpty()) url = a.optString("browser_download_url")
             }
             if (url.isEmpty() || code <= BuildConfig.VERSION_CODE) null
             else UpdateInfo(code, tag.removePrefix("v"), o.optString("body").take(400), url)

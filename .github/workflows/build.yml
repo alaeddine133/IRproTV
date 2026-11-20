@@ -41,7 +41,9 @@ jobs:
           chmod +x gradlew
           ./gradlew testReleaseUnitTest assembleRelease --no-daemon --stacktrace
           mkdir -p dist
-          cp app/build/outputs/apk/release/app-release.apk dist/IRPRO-TV.apk
+          ls app/build/outputs/apk/release/
+          cp app/build/outputs/apk/release/app-universal-release.apk dist/IRPRO-TV.apk
+          cp app/build/outputs/apk/release/app-armeabi-v7a-release.apk dist/IRPRO-TV-box.apk
 
       - name: Publier la version (lien de téléchargement fixe)
         uses: softprops/action-gh-release@v2
@@ -49,4 +51,6 @@ jobs:
           tag_name: v1.0.${{ github.run_number }}
           name: IR PRO TV 1.0.${{ github.run_number }}
           make_latest: true
-          files: dist/IRPRO-TV.apk
+          files: |
+            dist/IRPRO-TV.apk
+            dist/IRPRO-TV-box.apk
