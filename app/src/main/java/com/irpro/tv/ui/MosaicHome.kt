@@ -127,15 +127,8 @@ fun MosaicHomeScreen(
     }
 
     // Lueurs qui dérivent dans le fond
-    val inf = rememberInfiniteTransition(label = "home")
-    val drift by inf.animateFloat(0f, 1f, infiniteRepeatable(tween(18_000, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "drift")
-
-    BoxWithConstraints(Modifier.fillMaxSize().background(M_BG)) {
+    MosaicBackground { BoxWithConstraints(Modifier.fillMaxSize()) {
         val compact = maxHeight < 420.dp
-        Box(Modifier.offset((-150 + 60 * drift).dp, (-200 + 30 * drift).dp).size(700.dp, 500.dp)
-            .background(Brush.radialGradient(listOf(Color(0x598B5CF6), Color.Transparent))))
-        Box(Modifier.align(Alignment.BottomEnd).offset((200 - 60 * drift).dp, (250 - 30 * drift).dp).size(700.dp, 500.dp)
-            .background(Brush.radialGradient(listOf(Color(0x2E22D3EE), Color.Transparent))))
 
         Column(Modifier.fillMaxSize().padding(horizontal = if (compact) 24.dp else 48.dp, vertical = if (compact) 14.dp else 24.dp)) {
             // Barre du haut
@@ -208,7 +201,7 @@ fun MosaicHomeScreen(
                     .background(Color(0xE607060D), RoundedCornerShape(10.dp)).border(1.dp, M_CYAN, RoundedCornerShape(10.dp))
                     .padding(horizontal = 18.dp, vertical = 10.dp))
         }
-    }
+    } }
 }
 
 /** Une tuile : apparition en cascade, anneau cyan qui respire quand elle est sélectionnée. */
@@ -227,8 +220,6 @@ private fun Tile(
     val appear = remember { Animatable(0f) }
     LaunchedEffect(Unit) { delay(60L + index * 120L); appear.animateTo(1f, tween(650, easing = FastOutSlowInEasing)) }
     val sc by animateFloatAsState(if (f) 1.025f else 1f, tween(220), label = "tile")
-    val inf = rememberInfiniteTransition(label = "ring")
-    val glow by inf.animateFloat(0.45f, 0.85f, infiniteRepeatable(tween(1200), RepeatMode.Reverse), label = "glow")
     val shape = RoundedCornerShape(radius)
     Box(
         modifier
@@ -238,8 +229,7 @@ private fun Tile(
                 scaleX = s; scaleY = s
                 translationY = (1f - appear.value) * 40f
             }
-            .then(if (f) Modifier.shadow((14 + 14 * glow).dp, shape, ambientColor = M_CYAN, spotColor = M_CYAN)
-                .border(4.dp, M_CYAN.copy(alpha = 0.6f + 0.4f * glow), shape).padding(2.dp).border(2.dp, M_BG, shape) else Modifier)
+            .mosaicRing(f, shape)
             .then(focusMod)
             .clip(shape)
             .background(bg)

@@ -71,7 +71,7 @@ object Updater {
         while (conn.responseCode in 300..399 && hops++ < 6) {
             val loc = conn.getHeaderField("Location"); conn.disconnect(); conn = open(loc)
         }
-        val total = conn.contentLengthLong
+        val total = conn.contentLength.toLong()   // Android 6 : pas de contentLengthLong
         conn.inputStream.use { input ->
             out.outputStream().use { o ->
                 val buf = ByteArray(64 * 1024); var done = 0L
@@ -130,7 +130,7 @@ object Updater {
             while (conn.responseCode in 300..399 && hops++ < 6) {
                 val loc = conn.getHeaderField("Location"); conn.disconnect(); conn = open(loc)
             }
-            val total = if (conn.contentLengthLong > 0) conn.contentLengthLong else info.size
+            val total = conn.contentLength.toLong().let { if (it > 0) it else info.size }
             var done = 0L
             conn.inputStream.use { input ->
                 session.openWrite("base.apk", 0, if (total > 0) total else -1).use { out ->

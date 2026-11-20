@@ -101,9 +101,11 @@ fun GuideScreen(
     val firstFocus = remember { FocusRequester() }
 
     // Charge le guide des chaînes visibles (et un peu au-delà)
-    LaunchedEffect(catIdx, listState.firstVisibleItemIndex) {
-        val from = listState.firstVisibleItemIndex
-        channels.drop(from).take(14).forEach { ch -> if (ch.id !in epg) epg[ch.id] = Epg.forChannel(playlist, ch) }
+    // (suivi du défilement sans relancer l'écran à chaque ligne, et sans annuler un chargement en cours)
+    LaunchedEffect(catIdx) {
+        androidx.compose.runtime.snapshotFlow { listState.firstVisibleItemIndex }.collect { from ->
+            channels.drop(from).take(14).forEach { ch -> if (ch.id !in epg) epg[ch.id] = Epg.forChannel(playlist, ch) }
+        }
     }
     LaunchedEffect(catIdx) {
         val i = channels.indexOfFirst { it.id == focusId }

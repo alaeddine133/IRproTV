@@ -35,7 +35,7 @@ object PlaylistRules {
 
     /** Vrai si le début du fichier ressemble à une liste M3U. */
     fun looksLikeM3u(head: String): Boolean {
-        val t = head.trimStart('﻿', ' ', '\n', '\r', '\t')
+        val t = head.trimStart('\uFEFF', ' ', '\n', '\r', '\t')
         return t.startsWith("#EXTM3U", true) || t.contains("#EXTINF", true)
     }
 

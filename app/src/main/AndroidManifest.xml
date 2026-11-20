@@ -10,6 +10,8 @@
     <!-- Box TV : pas d'écran tactile ; Leanback optionnel pour s'installer sur toutes les box -->
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
     <uses-feature android:name="android.software.leanback" android:required="false" />
+    <!-- Box reliées en Ethernet (sans Wi-Fi) acceptées aussi -->
+    <uses-feature android:name="android.hardware.wifi" android:required="false" />
 
     <application
         android:allowBackup="true"

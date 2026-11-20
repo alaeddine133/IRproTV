@@ -18,7 +18,7 @@ object M3uParser {
         val episodes = HashMap<String, MutableList<Episode>>()
         // Une même adresse peut apparaître plusieurs fois : on garde des identifiants uniques et stables
         val seen = HashMap<String, Int>()
-        fun uid(url: String): String { val n = seen.getOrDefault(url, 0); seen[url] = n + 1; return if (n == 0) url else "$url#$n" }
+        fun uid(url: String): String { val n = seen[url] ?: 0; seen[url] = n + 1; return if (n == 0) url else "$url#$n" }
 
         var name: String? = null
         var logo = ""

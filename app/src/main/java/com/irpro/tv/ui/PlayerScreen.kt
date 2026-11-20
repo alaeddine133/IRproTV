@@ -305,7 +305,7 @@ fun VodPlayerScreen(
     val next = queue.getOrNull(index + 1)
     val prev = queue.getOrNull(index - 1)
     val pb = rememberPlayback()
-    val settings = UserData.settings.value
+    val settings by UserData.settings.collectAsState()
 
     var askResume by remember(item.id) { mutableStateOf(if (index == startIndex && startMs != null) null else UserData.resumeOf(playlist.id, item.id)?.takeIf { it.pos > 30_000 }) }
     var started by remember(item.id) { mutableStateOf(false) }

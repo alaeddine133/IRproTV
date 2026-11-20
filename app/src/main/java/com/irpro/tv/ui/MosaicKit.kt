@@ -65,12 +65,13 @@ object Mz {
 @Composable
 fun MosaicBackground(modifier: Modifier = Modifier, content: @Composable BoxScope.() -> Unit) {
     val inf = rememberInfiniteTransition(label = "bg")
-    val d by inf.animateFloat(0f, 1f, infiniteRepeatable(tween(18_000, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "drift")
+    val d = inf.animateFloat(0f, 1f, infiniteRepeatable(tween(18_000, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "drift")
     Box(modifier.fillMaxSize().background(Mz.Bg)) {
-        Box(Modifier.offset((-150 + 60 * d).dp, (-200 + 30 * d).dp).size(700.dp, 500.dp)
-            .background(Brush.radialGradient(listOf(Color(0x528B5CF6), Color.Transparent))))
-        Box(Modifier.align(Alignment.BottomEnd).offset((200 - 60 * d).dp, (250 - 30 * d).dp).size(700.dp, 500.dp)
-            .background(Brush.radialGradient(listOf(Color(0x2922D3EE), Color.Transparent))))
+        // Le mouvement est appliqué au dessin seulement : l'écran n'est pas recalculé à chaque image
+        Box(Modifier.offset((-150).dp, (-200).dp).graphicsLayer { translationX = 60.dp.toPx() * d.value; translationY = 30.dp.toPx() * d.value }
+            .size(700.dp, 500.dp).background(Brush.radialGradient(listOf(Color(0x528B5CF6), Color.Transparent))))
+        Box(Modifier.align(Alignment.BottomEnd).offset(200.dp, 250.dp).graphicsLayer { translationX = -60.dp.toPx() * d.value; translationY = -30.dp.toPx() * d.value }
+            .size(700.dp, 500.dp).background(Brush.radialGradient(listOf(Color(0x2922D3EE), Color.Transparent))))
         content()
     }
 }
