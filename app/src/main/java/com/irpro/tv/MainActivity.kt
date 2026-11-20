@@ -325,7 +325,7 @@ fun App(startScreen: String = "intro") {
                         )
                         // Nouvelle version de l'appli ? (vérifié en arrivant sur l'accueil)
                         LaunchedEffect(updateChecked) {
-                            if (!updateChecked) { delay(2500); update = Updater.check(); updateChecked = true }
+                            if (!updateChecked) { delay(2500); update = Updater.check(ctx); updateChecked = true }
                         }
                         update?.let { com.irpro.tv.ui.ProUpdateDialog(it, onLater = { update = null }) }
                     }

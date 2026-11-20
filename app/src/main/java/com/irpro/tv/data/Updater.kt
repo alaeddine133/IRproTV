@@ -14,14 +14,23 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 
-data class UpdateInfo(val versionCode: Int, val versionName: String, val notes: String, val apkUrl: String)
+data class UpdateInfo(val versionCode: Int, val versionName: String, val notes: String, val apkUrl: String, val size: Long = 0)
 
 /** Mise à jour automatique : vérifie la dernière version publiée sur GitHub, la télécharge et lance l'installation. */
 object Updater {
     private const val API = "https://api.github.com/repos/alaeddine133/IRproTV/releases/latest"
 
     /** Renvoie la nouvelle version si elle est plus récente que celle installée, sinon null. */
-    suspend fun check(): UpdateInfo? = withContext(Dispatchers.IO) {
+    /**
+     * Version installée : « box » (légère, 32 bits) ou complète. On reprend toujours la même,
+     * sinon une box peu puissante ou presque pleine refuse l'installation.
+     */
+    private fun isBoxBuild(ctx: Context): Boolean = runCatching {
+        java.util.zip.ZipFile(ctx.applicationInfo.sourceDir).use { z -> z.getEntry("lib/arm64-v8a/libvlc.so") == null }
+    }.getOrDefault(Build.SUPPORTED_64_BIT_ABIS.isEmpty())
+
+    suspend fun check(ctx: Context): UpdateInfo? = withContext(Dispatchers.IO) {
+        val box = isBoxBuild(ctx)
         runCatching {
             val c = (URL(API).openConnection() as HttpURLConnection).apply {
                 connectTimeout = 10_000; readTimeout = 15_000
@@ -34,16 +43,16 @@ object Updater {
             val code = tag.substringAfterLast('.').toIntOrNull() ?: return@runCatching null
             val assets = o.optJSONArray("assets") ?: return@runCatching null
             var url = ""
+            var size = 0L
+            val wanted = if (box) "IRPRO-TV-box.apk" else "IRPRO-TV.apk"
             for (i in 0 until assets.length()) {
                 val a = assets.getJSONObject(i)
-                // Box 32 bits : version légère ; sinon la version complète
-                val wanted = if (Build.SUPPORTED_64_BIT_ABIS.isEmpty()) "IRPRO-TV-box.apk" else "IRPRO-TV.apk"
                 val n = a.optString("name")
-                if (n == wanted) { url = a.optString("browser_download_url"); break }
-                if (n == "IRPRO-TV.apk" && url.isEmpty()) url = a.optString("browser_download_url")
+                if (n == wanted) { url = a.optString("browser_download_url"); size = a.optLong("size"); break }
+                if (n == "IRPRO-TV.apk" && url.isEmpty()) { url = a.optString("browser_download_url"); size = a.optLong("size") }
             }
             if (url.isEmpty() || code <= BuildConfig.VERSION_CODE) null
-            else UpdateInfo(code, tag.removePrefix("v"), o.optString("body").take(400), url)
+            else UpdateInfo(code, tag.removePrefix("v"), o.optString("body").take(400), url, size)
         }.getOrNull()
     }
 
@@ -74,6 +83,8 @@ object Updater {
             }
         }
         conn.disconnect()
+        // Fichier incomplet (connexion coupée) : Android dirait « Application non installée »
+        if (info.size > 0 && out.length() != info.size) { out.delete(); error("téléchargement incomplet") }
         out
     }
 
