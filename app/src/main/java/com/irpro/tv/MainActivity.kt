@@ -8,7 +8,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -58,7 +58,7 @@ fun StartScreen() {
     val appear = remember { Animatable(0f) }
     LaunchedEffect(Unit) { appear.animateTo(1f, tween(durationMillis = 900)) }
 
-    Box(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
             .background(
@@ -69,6 +69,9 @@ fun StartScreen() {
             ),
         contentAlignment = Alignment.Center
     ) {
+        // Le logo s'adapte à la hauteur de l'écran (petit téléphone ou grande TV)
+        val logoSize = (maxHeight * 0.38f).coerceIn(90.dp, 200.dp)
+        val gap = (maxHeight * 0.04f).coerceIn(8.dp, 28.dp)
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
@@ -78,10 +81,10 @@ fun StartScreen() {
                 painter = painterResource(id = R.drawable.logo),
                 contentDescription = "Logo IR PRO TV",
                 modifier = Modifier
-                    .size(180.dp)
+                    .size(logoSize)
                     .scale(0.85f + 0.15f * appear.value)
             )
-            Spacer(Modifier.height(28.dp))
+            Spacer(Modifier.height(gap))
             Text(
                 text = buildAnnotatedString {
                     append("IR PRO ")
@@ -99,14 +102,19 @@ fun StartScreen() {
                 fontSize = 16.sp,
                 letterSpacing = 8.sp
             )
+            Spacer(Modifier.height(gap * 1.5f))
+            // Placé sous le reste (plus en bas d'écran) : ne peut plus chevaucher le texte
+            Text(
+                text = "Installation réussie · la suite arrive bientôt",
+                color = Color(0xFFC9C9D1),
+                fontSize = 13.sp
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = "Version ${BuildConfig.VERSION_NAME}",
+                color = IrColors.TextDim,
+                fontSize = 12.sp
+            )
         }
-        Text(
-            text = "Version ${BuildConfig.VERSION_NAME}",
-            color = IrColors.TextDim,
-            fontSize = 12.sp,
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 24.dp)
-        )
     }
 }
