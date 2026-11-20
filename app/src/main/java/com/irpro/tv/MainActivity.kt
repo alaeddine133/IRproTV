@@ -18,7 +18,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -45,7 +49,11 @@ object IrColors {
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { StartScreen() }
+        setContent {
+            // Intro vidéo (complète la 1re fois, courte ensuite), puis l'appli
+            var introDone by rememberSaveable { mutableStateOf(false) }
+            if (!introDone) IntroScreen(onFinished = { introDone = true }) else StartScreen()
+        }
     }
 }
 
@@ -105,7 +113,7 @@ fun StartScreen() {
             Spacer(Modifier.height(gap * 1.5f))
             // Placé sous le reste (plus en bas d'écran) : ne peut plus chevaucher le texte
             Text(
-                text = "Installation réussie · la suite arrive bientôt",
+                text = "Prochaine étape : ajout de ta playlist",
                 color = Color(0xFFC9C9D1),
                 fontSize = 13.sp
             )
