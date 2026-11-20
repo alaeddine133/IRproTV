@@ -218,7 +218,6 @@ fun App(startScreen: String = "intro") {
                         onRefresh = { if (!content.loading) ContentRepository.load(ctx, active, refresh = true) },
                         onCheckUpdate = { updateChecked = false; screen = "home" },
                         onBack = { screen = "home" },
-                        startSection = if (themeSwitched) 6 else 0,
                         onProfiles = { screen = "profiles" },
                     )
                     screen == "search" -> com.irpro.tv.ui.ProSearchScreen(

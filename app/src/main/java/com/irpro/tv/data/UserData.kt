@@ -39,7 +39,7 @@ object UserData {
         appCtx = ctx.applicationContext
         _settings.value = loadSettings()
         FrenchPriority.enabled = _settings.value.frenchFirst
-        com.irpro.tv.ui.ThemeState.pro = _settings.value.theme == "pro"
+        com.irpro.tv.ui.ThemeState.pro = true   // un seul style (Mosaïque) pour toute l'appli
         Profiles.init(appCtx)
         Parental.init(appCtx)
     }
@@ -74,7 +74,7 @@ object UserData {
         val s = f(_settings.value)
         _settings.value = s
         FrenchPriority.enabled = s.frenchFirst
-        com.irpro.tv.ui.ThemeState.pro = s.theme == "pro"
+        com.irpro.tv.ui.ThemeState.pro = true
         val o = JSONObject().apply {
             put("engine", s.engine); put("buffer", s.buffer); put("audioLang", s.audioLang)
             put("subtitlesDefault", s.subtitlesDefault); put("subtitleSize", s.subtitleSize)

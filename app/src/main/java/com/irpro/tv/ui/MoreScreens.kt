@@ -220,7 +220,7 @@ fun SettingsScreen(
     val ctx = LocalContext.current
     var note by remember { mutableStateOf<String?>(null) }
     val s by UserData.settings.collectAsState()
-    val sections = listOf("Playlists", "Mises à jour", "Langue et priorité", "Lecteur", "Guide TV", "Apparence et sons", "Thème", "Profils", "Contrôle parental", "À propos")
+    val sections = listOf("Playlists", "Mises à jour", "Langue et priorité", "Lecteur", "Guide TV", "Apparence et sons", "Profils", "Contrôle parental", "À propos")
     var sec by remember { mutableIntStateOf(startSection) }
     val first = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
@@ -303,20 +303,6 @@ fun SettingsScreen(
                     note?.let { Text(it, color = IrColors.Cyan, fontSize = 14.sp) }
                 }
                 6 -> {
-                    Text("Choisis l'apparence d'IR PRO TV. Le changement s'applique tout de suite.", color = IrColors.TextDim, fontSize = 15.sp)
-                    Spacer(Modifier.height(6.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(22.dp)) {
-                        ThemeCard("Thème 1 · Classique", "Le design d'origine de l'appli", pro = false, selected = s.theme != "pro") {
-                            if (s.theme == "pro") { com.irpro.tv.themeSwitched = true; UserData.updateSettings { it.copy(theme = "classic") } }
-                        }
-                        ThemeCard("Thème 2 · Pro", "Grandes images, fiches détaillées", pro = true, selected = s.theme == "pro") {
-                            if (s.theme != "pro") { com.irpro.tv.themeSwitched = true; UserData.updateSettings { it.copy(theme = "pro") } }
-                        }
-                    }
-                    Spacer(Modifier.height(6.dp))
-                    Text("Tes playlists, ta liste et tes réglages restent les mêmes quel que soit le thème.", color = IrColors.TextDim, fontSize = 14.sp)
-                }
-                7 -> {
                     val profiles = remember(profRev) { com.irpro.tv.data.Profiles.all() }
                     val cur = remember(profRev) { com.irpro.tv.data.Profiles.current() }
                     InfoLine("Profil actuel", cur.name + if (cur.kids) " · Enfants" else "")
@@ -336,7 +322,7 @@ fun SettingsScreen(
                         }
                     }
                 }
-                8 -> {
+                7 -> {
                     parRev.let { }
                     val P = com.irpro.tv.data.Parental
                     Text("Masque les catégories pour adultes (XXX, Adultes, +18…) dans le Direct, les Films, les Séries et la Recherche.", color = IrColors.TextDim, fontSize = 14.sp)
