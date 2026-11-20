@@ -362,7 +362,8 @@ fun SettingsScreen(
                 }
             }
         }
-    }    pin?.let { r ->
+    }
+    pin?.let { r ->
         PinDialog(r.title, r.sub, onDismiss = { pin = null }) { c ->
             val res = r.onCode(c)
             if (res == null && pin === r) pin = null
