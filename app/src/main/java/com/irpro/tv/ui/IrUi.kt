@@ -68,8 +68,8 @@ fun FocusTile(
             .clip(shape)
             .background(if (focused) IrColors.Violet else IrColors.Card)
             .border(if (focused) 3.dp else 1.dp, if (focused) IrColors.Cyan else Color(0x22FFFFFF), shape)
-            .onFocusChanged { focused = it.isFocused }
-            .clickable(onClick = onClick)
+            .onFocusChanged { if (it.isFocused && !focused) Sfx.move(); focused = it.isFocused }
+            .clickable { Sfx.select(); onClick() }
             .padding(20.dp),
     ) { content(focused) }
 }
@@ -102,8 +102,8 @@ fun IrButton(
                 if (focused) IrColors.Cyan else if (primary) Color.Transparent else Color(0x55FFFFFF),
                 shape
             )
-            .onFocusChanged { focused = it.isFocused }
-            .clickable(enabled = enabled, onClick = onClick)
+            .onFocusChanged { if (it.isFocused && !focused) Sfx.move(); focused = it.isFocused }
+            .clickable(enabled = enabled) { Sfx.select(); onClick() }
             .padding(horizontal = 28.dp, vertical = 12.dp),
         contentAlignment = Alignment.Center,
     ) {

@@ -42,8 +42,9 @@ object ContentRepository {
         job = scope.launch {
             val cached = if (_state.value.playlistId == playlist.id && _state.value.catalog != null) _state.value.catalog
             else cache.read(playlist.id)?.sorted()
-            _state.value = LoadState(playlist.id, cached, loading = refresh, step = if (refresh) "Connexion au serveur…" else "")
-            if (!refresh) return@launch
+            val doRefresh = refresh || cached == null
+            _state.value = LoadState(playlist.id, cached, loading = doRefresh, step = if (doRefresh) "Connexion au serveur…" else "")
+            if (!doRefresh) return@launch
             try {
                 val fresh = when (playlist.type) {
                     PlaylistType.XTREAM -> loadXtream(playlist)

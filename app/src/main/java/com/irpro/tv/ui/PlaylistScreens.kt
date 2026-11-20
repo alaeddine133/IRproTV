@@ -86,9 +86,9 @@ fun WelcomeScreen(
     onBack: () -> Unit,
     onXtream: () -> Unit,
     onM3u: () -> Unit,
+    onPhone: () -> Unit,
 ) {
     if (canGoBack) BackHandler(onBack = onBack)
-    var note by remember { mutableStateOf<String?>(null) }
     val first = remember { FocusRequester() }
     LaunchedEffect(Unit) { first.requestFocus() }
 
@@ -100,25 +100,15 @@ fun WelcomeScreen(
             Text("Ajoute ta playlist pour commencer", color = IrColors.TextDim, fontSize = 16.sp)
             Spacer(Modifier.height(28.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(20.dp), modifier = Modifier.fillMaxWidth()) {
-                FocusTile(
-                    modifier = Modifier.weight(1f).heightIn(min = 170.dp).focusRequester(first),
-                    onClick = onXtream,
-                ) { f ->
-                    TileText("⚿", "Xtream Codes", "Serveur, utilisateur, mot de passe", f, badge = "Recommandé")
+                FocusTile(modifier = Modifier.weight(1f).heightIn(min = 170.dp).focusRequester(first), onClick = onPhone) { f ->
+                    TileText("▩", "Avec mon téléphone", "Scanne un QR code et tape tout sur ton téléphone", f, badge = "Recommandé")
+                }
+                FocusTile(modifier = Modifier.weight(1f).heightIn(min = 170.dp), onClick = onXtream) { f ->
+                    TileText("⚿", "Xtream Codes", "Serveur, utilisateur, mot de passe", f)
                 }
                 FocusTile(modifier = Modifier.weight(1f).heightIn(min = 170.dp), onClick = onM3u) { f ->
                     TileText("∞", "Lien M3U", "Colle l'adresse de ta liste", f)
                 }
-                FocusTile(
-                    modifier = Modifier.weight(1f).heightIn(min = 170.dp),
-                    onClick = { note = "L'ajout avec le téléphone (QR code) arrive dans une prochaine version." },
-                ) { f ->
-                    TileText("▩", "Avec mon téléphone", "Scanne un QR code et tape tout sur ton téléphone", f, badge = "Bientôt")
-                }
-            }
-            note?.let {
-                Spacer(Modifier.height(18.dp))
-                Text(it, color = IrColors.Cyan, fontSize = 15.sp)
             }
         }
     }
@@ -380,7 +370,7 @@ fun PlaylistReadyScreen(
             Spacer(Modifier.height(20.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 IrButton("Mettre à jour maintenant", modifier = Modifier.focusRequester(first), enabled = !state.loading, onClick = onRefresh)
-                IrButton("Ajouter une playlist", primary = false, onClick = onAdd)
+                IrButton("Ajouter / changer de playlist", primary = false, onClick = onAdd)
                 IrButton(
                     if (confirmDelete) "Confirmer la suppression" else "Supprimer",
                     primary = false,

@@ -20,6 +20,11 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -43,6 +48,8 @@ object IntroPrefs {
     private const val FILE = "irpro_prefs"
     private const val KEY_SEEN = "intro_full_seen"
     fun fullSeen(ctx: Context) = ctx.getSharedPreferences(FILE, Context.MODE_PRIVATE).getBoolean(KEY_SEEN, false)
+    fun reset(ctx: Context) =
+        ctx.getSharedPreferences(FILE, Context.MODE_PRIVATE).edit().putBoolean(KEY_SEEN, false).apply()
     fun markFullSeen(ctx: Context) =
         ctx.getSharedPreferences(FILE, Context.MODE_PRIVATE).edit().putBoolean(KEY_SEEN, true).apply()
 }
@@ -67,7 +74,7 @@ fun canPlay4k(ctx: Context): Boolean = try {
 
 @OptIn(UnstableApi::class)
 @Composable
-fun IntroScreen(onFinished: () -> Unit) {
+fun IntroScreen(channelCount: Int = 0, onFinished: () -> Unit) {
     val context = LocalContext.current
     val full = remember { !IntroPrefs.fullSeen(context) }
     val rawId = remember {
@@ -146,5 +153,52 @@ fun IntroScreen(onFinished: () -> Unit) {
                 }
             }
         )
+        // Compteur réel de chaînes (intro complète), aux mêmes place et moment que dans la vidéo
+        if (full && channelCount > 0) CounterOverlay(player, channelCount)
+    }
+}
+
+
+@Composable
+private fun CounterOverlay(player: ExoPlayer, count: Int) {
+    var t by androidx.compose.runtime.remember { androidx.compose.runtime.mutableLongStateOf(0L) }
+    LaunchedEffect(player) { while (true) { t = player.currentPosition; kotlinx.coroutines.delay(33) } }
+    val sec = t / 1000f
+    val alpha = when {
+        sec < 3.75f -> 0f
+        sec < 3.9f -> (sec - 3.75f) / 0.15f
+        sec < 4.45f -> 1f
+        sec < 4.75f -> 1f - (sec - 4.45f) / 0.3f
+        else -> 0f
+    }
+    if (alpha <= 0f) return
+    val p = ((sec - 3.8f) / 0.7f).coerceIn(0f, 1f)
+    val shown = (count * (1 - (1 - p) * (1 - p) * (1 - p))).toInt()
+    val bold = androidx.compose.ui.text.font.FontFamily(androidx.compose.ui.text.font.Font(R.font.inter_display_bold))
+    val medium = androidx.compose.ui.text.font.FontFamily(androidx.compose.ui.text.font.Font(R.font.inter_display_medium))
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
+        // Même cadrage que la vidéo (mode « zoom ») : conception 1920 x 1080
+        val s = maxOf(maxWidth.value / 1920f, maxHeight.value / 1080f)
+        val ox = (maxWidth.value - 1920f * s) / 2f
+        val oy = (maxHeight.value - 1080f * s) / 2f
+        val density = androidx.compose.ui.platform.LocalDensity.current
+        androidx.compose.foundation.layout.Column(
+            Modifier
+                .offset(x = (ox + 150f * s).dp, y = (oy + (1080f - 190f - 196f) * s).dp)
+                .alpha(alpha)
+        ) {
+            androidx.compose.material3.Text(
+                String.format(java.util.Locale.FRANCE, "%,d", shown).replace('\u202F', ' ').replace('\u00A0', ' '),
+                color = Color(0xFFF2F2F5), fontFamily = bold,
+                fontSize = with(density) { (150f * s).dp.toSp() },
+                letterSpacing = with(density) { (-6f * s).dp.toSp() },
+                lineHeight = with(density) { (150f * s).dp.toSp() },
+            )
+            androidx.compose.material3.Text(
+                "CHAÎNES EN DIRECT", color = Color(0xFFA78BFA), fontFamily = medium,
+                fontSize = with(density) { (30f * s).dp.toSp() },
+                letterSpacing = with(density) { (1f * s).dp.toSp() },
+            )
+        }
     }
 }

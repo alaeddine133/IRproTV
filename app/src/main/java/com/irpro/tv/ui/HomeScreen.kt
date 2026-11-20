@@ -74,7 +74,7 @@ private fun subtitle(s: Section, c: Catalog): String {
         Section.MOVIES -> "${formatCount(c.movies.size)} films · ${c.movieCategories.size} catégories"
         Section.SERIES -> "${formatCount(c.series.size)} séries · ${c.seriesCategories.size} catégories"
         Section.GUIDE -> "Ce qui passe maintenant et ce soir"
-        Section.FAVORITES -> "Appui long sur une chaîne pour l'ajouter"
+        Section.FAVORITES -> "Appui long ou touche Menu sur une chaîne pour l'ajouter"
     }
 }
 
@@ -86,6 +86,10 @@ fun HomeScreen(
     onOpen: (Section) -> Unit,
     onSearch: () -> Unit,
     onSettings: () -> Unit,
+    lastChannel: com.irpro.tv.data.Channel? = null,
+    favoritesCount: Int = 0,
+    onPlayChannel: (com.irpro.tv.data.Channel) -> Unit = {},
+    onMovie: (String) -> Unit = {},
 ) {
     val activity = LocalContext.current as? Activity
     var selected by rememberSaveable { mutableIntStateOf(0) }
@@ -179,9 +183,11 @@ fun HomeScreen(
             // Cartes du bas
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
                 val latest = remember(catalog) { catalog.movies.maxByOrNull { it.added }?.takeIf { it.added > 0 } }
-                InfoCard("Dernière chaîne", "Aucune pour l'instant", Modifier.weight(1f)) { onOpen(Section.LIVE) }
-                InfoCard("Favoris", "Ajoute tes chaînes préférées", Modifier.weight(1f)) { onOpen(Section.FAVORITES) }
-                InfoCard("Nouveau film", latest?.name ?: "—", Modifier.weight(1f)) { onOpen(Section.MOVIES) }
+                InfoCard("Dernière chaîne", lastChannel?.name ?: "Aucune pour l'instant", Modifier.weight(1f)) {
+                    if (lastChannel != null) onPlayChannel(lastChannel) else onOpen(Section.LIVE)
+                }
+                InfoCard("Favoris", if (favoritesCount > 0) "$favoritesCount chaîne(s)" else "Ajoute tes chaînes préférées", Modifier.weight(1f)) { onOpen(Section.FAVORITES) }
+                InfoCard("Nouveau film", latest?.name ?: "—", Modifier.weight(1f)) { if (latest != null) onMovie(latest.id) else onOpen(Section.MOVIES) }
                 InfoCard("Abonnement", subscriptionText(playlist), Modifier.weight(1f)) { onSettings() }
             }
         }
@@ -237,8 +243,8 @@ private fun ConsoleTile(
                     if (focused) IrColors.Cyan else Color.Transparent,
                     RoundedCornerShape(if (selected) 20.dp else 14.dp)
                 )
-                .onFocusChanged { focused = it.isFocused; if (it.isFocused) onFocused() }
-                .clickable(onClick = onClick),
+                .onFocusChanged { if (it.isFocused && !focused) Sfx.move(); focused = it.isFocused; if (it.isFocused) onFocused() }
+                .clickable { Sfx.select(); onClick() },
             contentAlignment = Alignment.Center,
         ) {
             IrIconView(section.icon, if (selected) Color.White else Color(0xFFC9D4FF), size * 0.46f)
